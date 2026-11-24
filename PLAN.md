@@ -1,6 +1,6 @@
 # Stage 1 — Deterministic Simulator
 
-**Status:** Proposed, awaiting approval
+**Status:** Implemented, awaiting approval
 **Date:** 2026-11-24
 **Scope:** Build the deterministic substrate only. No Raft, storage engine, KV,
 sharding, SQL, or dashboard code in this stage.

@@ -11,10 +11,20 @@ failure.
 
 ## Status
 
-**Stage 0 — scaffolding and Stage 1 plan. No implementation code yet.**
+**Stage 1 — deterministic simulator — implemented and awaiting approval.**
 
-Stage 1 is specified in [PLAN.md](PLAN.md) and is waiting for approval.
-The Go toolchain is not yet installed in the development environment.
+The simulator, chaos scenario, CLI, golden trace, and full Stage 1 test suite are
+in place. No Stage 2 code exists. The specification is in [PLAN.md](PLAN.md).
+
+Verified commands:
+
+```sh
+go test ./...
+go test -race ./...
+go vet ./...
+go test ./internal/scenarios -run TestSameSeedProducesIdenticalTrace -count=5
+go run ./cmd/simctl -seed 42 -scenario ping -ticks 500 -trace
+```
 
 ## Non-negotiable rules
 
@@ -35,7 +45,7 @@ The Go toolchain is not yet installed in the development environment.
 
 | Stage | Layer | Package | Status |
 |------:|-------|---------|--------|
-| 1 | Deterministic simulator (clock, network, disk, RNG, trace, invariants) | `internal/sim` | Planned |
+| 1 | Deterministic simulator (clock, network, disk, RNG, trace, invariants) | `internal/sim` | Complete, awaiting approval |
 | 2 | Raft (election and replication, Raft paper Figure 2) | `internal/raft` | Not started |
 | 3 | Storage engine (WAL, then LSM-tree) | `internal/storage` | Not started |
 | 4 | Linearizable KV API with client request ID deduplication | `internal/kv` | Not started |
@@ -49,20 +59,27 @@ Simulation code is single-threaded and event-driven.
 
 ```text
 .
-├── PLAN.md                 # Stage 1 specification (current artifact)
+├── PLAN.md                 # Stage 1 specification
 ├── README.md
 ├── Makefile
 ├── go.mod
 ├── cmd/
-│   └── simctl/             # Stage 1 CLI: run a scenario by seed, print trace
+│   └── simctl/             # run a scenario by seed, print trace/hashes
 ├── internal/
-│   ├── sim/                # clock, event queue, RNG, network, disk, trace
-│   ├── raft/               # later
+│   ├── sim/                # event queue, RNG, network, disk, trace, invariants
+│   ├── raft/               # Stage 2, intentionally empty
 │   ├── storage/            # later
 │   ├── kv/                 # later
-│   └── scenarios/          # deterministic scenarios and chaos schedules
-└── testdata/               # golden traces and state digests
+│   └── scenarios/          # ping/journal workload + chaos driver
+└── testdata/stage1/
+    └── ping-seed-42.trace  # byte-exact golden trace
 ```
+
+Stage 1 includes a frozen SplitMix64 PRNG, stable `(tick, sequence)` event
+ordering, network drops/delays/partitions, an asynchronous disk where only
+`Sync` survives crashes, epoch-filtered messages/timers/I/O, crash-safe fresh
+node factories, canonical traces and state hashes, per-step invariants, a
+100-seed smoke test, and a static API guard against non-deterministic APIs.
 
 ## Determinism rules for contributors
 
@@ -92,13 +109,16 @@ Requires Go 1.24 or newer.
 make test          # go test ./...
 make test-race     # go test -race ./...
 make vet           # go vet ./...
-make sim           # go run ./cmd/simctl -seed 1 -scenario ping
+make sim           # go run ./cmd/simctl -seed 1 -scenario ping -trace
+
+# Replay a failing seed (the failure report prints the exact command):
+go run ./cmd/simctl -seed <N> -scenario ping -ticks <T> -trace
 ```
 
-Planned replay command for a failing seed:
+Regenerate the reviewed golden trace after an intentional behavior change:
 
 ```sh
-go run ./cmd/simctl -seed <N> -scenario <name> -trace
+go test ./internal/scenarios -run TestGoldenTraceSeed42 -update
 ```
 
 ## Bug log
@@ -108,7 +128,7 @@ accepted. The seed, scenario, and regression test are mandatory.
 
 | ID | Stage | Seed | Symptom | Root cause | Fix | Regression test |
 |----|------:|-----:|---------|------------|-----|-----------------|
-| —  | —     | —    | No bugs logged yet | — | — | — |
+| S1-001 | 1 | 5 (forced restarts) | Recovery invariant would falsely report that a node recovered more records than it synced after two or more restarts | The ledger tracked only the current incarnation's synced count, while the journal is cumulative across incarnations | Track cumulative synced records across all incarnations, keyed by an incarnation counter | `TestPingInvariantAcrossMultipleRestarts` |
 
 ## Stage gates
 
