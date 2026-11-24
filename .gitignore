@@ -1,0 +1,15 @@
+# Build and test artifacts
+/bin/
+/dist/
+*.test
+*.out
+coverage.*
+
+# Local simulator output
+/traces/
+*.trace.tmp
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
