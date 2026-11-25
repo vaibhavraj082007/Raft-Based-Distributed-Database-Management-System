@@ -1,9 +1,13 @@
 # Stage 1 — Deterministic Simulator
 
-**Status:** Implemented, awaiting approval
+**Status:** Complete (approved 2026-11-25)
 **Date:** 2026-11-24
 **Scope:** Build the deterministic substrate only. No Raft, storage engine, KV,
 sharding, SQL, or dashboard code in this stage.
+
+> Stage 1 is approved. Stage 2 (Raft) is specified in
+> [PLAN_STAGE2.md](PLAN_STAGE2.md) and is not implemented until that plan is
+> approved.
 
 ## 1. Goal
 
@@ -478,16 +482,16 @@ concerns, never for simulation time.
 
 ## 9. Acceptance checklist
 
-- [ ] Package layout and `go.mod` build with Go 1.24+.
-- [ ] All table-driven tests above pass.
-- [ ] Same-seed determinism test passes with `-count=5`.
-- [ ] Interleaved-simulator isolation test passes.
-- [ ] Golden trace is byte-identical across separate processes.
-- [ ] 100-seed smoke test passes within 10 seconds.
-- [ ] Static API guard passes.
-- [ ] Failure reports include seed, scenario, version, step, event, and repro.
-- [ ] README bug log updated (including "no bugs yet" if none).
-- [ ] No Stage 2+ implementation files.
+- [x] Package layout and `go.mod` build with Go 1.24+.
+- [x] All table-driven tests above pass.
+- [x] Same-seed determinism test passes with `-count=5`.
+- [x] Interleaved-simulator isolation test passes.
+- [x] Golden trace is byte-identical across separate processes.
+- [x] 100-seed smoke test passes within 10 seconds.
+- [x] Static API guard passes.
+- [x] Failure reports include seed, scenario, version, step, event, and repro.
+- [x] README bug log updated (including "no bugs yet" if none).
+- [x] No Stage 2+ implementation files.
 
 ## 10. Implementation order within Stage 1
 

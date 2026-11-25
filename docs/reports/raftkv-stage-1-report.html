@@ -1,0 +1,1981 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>raftkv — Stage 1 Report — Deterministic Simulator</title>
+<style>
+  @page { size: A4; margin: 17mm 15mm 18mm 15mm; }
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body {
+    margin: 0;
+    color: #1f2937;
+    background: #ffffff;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    font-size: 9.9pt;
+    line-height: 1.55;
+  }
+  p { margin: 0 0 3.2mm; orphans: 3; widows: 3; }
+  h2 {
+    margin: 0 0 5mm;
+    font-size: 20pt;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    color: #0f172a;
+    border-bottom: 1.2pt solid #0f766e;
+    padding-bottom: 2.5mm;
+    break-after: avoid;
+  }
+  h3 {
+    margin: 6mm 0 2.2mm;
+    font-size: 12.5pt;
+    line-height: 1.25;
+    color: #0f172a;
+    break-after: avoid;
+  }
+  h4 {
+    margin: 4mm 0 1.6mm;
+    font-size: 10.4pt;
+    color: #0f766e;
+    break-after: avoid;
+  }
+  ul, ol { margin: 0 0 3.5mm 5mm; padding: 0; }
+  li { margin: 0 0 1.2mm; }
+  strong { color: #0f172a; }
+  a { color: #0f766e; text-decoration: none; }
+  code {
+    font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+    font-size: 0.9em;
+  }
+  p code, li code, td code, .card code, .callout code {
+    background: #eef2f7;
+    color: #0f172a;
+    padding: 0.25mm 1.1mm;
+    border-radius: 1mm;
+  }
+  pre {
+    margin: 3mm 0 4.5mm;
+    padding: 3.6mm 4mm;
+    background: #0f172a;
+    color: #e2e8f0;
+    border-radius: 2.6mm;
+    font-size: 7.7pt;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    break-inside: avoid;
+  }
+  pre code { background: none; color: inherit; padding: 0; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 3mm 0 5mm;
+    font-size: 8.55pt;
+    line-height: 1.42;
+    break-inside: avoid;
+  }
+  th {
+    background: #0f172a;
+    color: #ffffff;
+    text-align: left;
+    padding: 2.3mm 2.6mm;
+    font-size: 8.2pt;
+    letter-spacing: 0.02em;
+    vertical-align: bottom;
+  }
+  td {
+    padding: 1.9mm 2.6mm;
+    border-bottom: 0.35pt solid #e2e8f0;
+    vertical-align: top;
+  }
+  tbody tr:nth-child(even) td { background: #f8fafc; }
+  th.num, td.num { text-align: right; white-space: nowrap; }
+  .section { break-before: page; }
+  .no-break { break-inside: avoid; }
+  .lead { font-size: 11.2pt; line-height: 1.55; color: #334155; margin-bottom: 5mm; }
+  .muted { color: #64748b; }
+  .small { font-size: 8.3pt; }
+  .tiny { font-size: 7.2pt; color: #64748b; }
+  .mono { font-family: "SFMono-Regular", Menlo, Consolas, monospace; }
+  .accent { color: #0f766e; }
+  .badge {
+    display: inline-block;
+    padding: 1.1mm 2.6mm;
+    border-radius: 99mm;
+    background: #ccfbf1;
+    color: #115e59;
+    font-size: 7.6pt;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .badge.amber { background: #fef3c7; color: #92400e; }
+  .badge.dark { background: rgba(255,255,255,0.12); color: #99f6e4; border: 0.4pt solid rgba(153,246,228,0.35); }
+  .callout {
+    margin: 3mm 0 5mm;
+    padding: 3.2mm 4.2mm;
+    background: #f0fdfa;
+    border-left: 1.2mm solid #0f766e;
+    border-radius: 1.6mm;
+    break-inside: avoid;
+  }
+  .callout.warn { background: #fffbeb; border-left-color: #b45309; }
+  .callout.dark { background: #0f172a; color: #cbd5e1; border-left-color: #2dd4bf; }
+  .callout.dark strong { color: #ffffff; }
+  .card {
+    border: 0.4pt solid #e2e8f0;
+    border-radius: 2.6mm;
+    padding: 3.4mm 4mm;
+    background: #ffffff;
+    break-inside: avoid;
+  }
+  .card h4 { margin-top: 0; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3mm; }
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2.6mm; margin: 4mm 0 5mm; }
+  .kpi {
+    padding: 3mm 3.2mm;
+    background: #f8fafc;
+    border: 0.4pt solid #e2e8f0;
+    border-radius: 2.4mm;
+  }
+  .kpi .n { font-size: 17pt; font-weight: 750; line-height: 1.1; color: #0f766e; letter-spacing: -0.03em; }
+  .kpi .l { margin-top: 1mm; font-size: 7.1pt; text-transform: uppercase; letter-spacing: 0.06em; color: #64748b; }
+  .toc {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 9mm;
+    row-gap: 2.1mm;
+    margin: 2mm 0 6mm;
+    font-size: 9.3pt;
+  }
+  .toc div { border-bottom: 0.3pt dotted #cbd5e1; padding-bottom: 1.3mm; }
+  .toc .n { display: inline-block; width: 7mm; color: #0f766e; font-weight: 700; }
+  .cover {
+    height: 260mm;
+    padding: 18mm 17mm 14mm;
+    border-radius: 3mm;
+    background:
+      radial-gradient(circle at 85% 8%, rgba(45,212,191,0.18), transparent 36%),
+      radial-gradient(circle at 8% 72%, rgba(37,99,235,0.20), transparent 38%),
+      linear-gradient(150deg, #020617 0%, #0f172a 55%, #111c33 100%);
+    color: #e2e8f0;
+    position: relative;
+    overflow: hidden;
+    break-after: page;
+  }
+  .cover:after {
+    content: "";
+    position: absolute;
+    right: -40mm;
+    top: 105mm;
+    width: 150mm;
+    height: 150mm;
+    border: 0.5pt solid rgba(148,163,184,0.18);
+    border-radius: 50%;
+  }
+  .cover .kicker {
+    font-size: 8pt;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: #5eead4;
+    margin-bottom: 7mm;
+  }
+  .cover h1 {
+    margin: 0;
+    font-size: 37pt;
+    line-height: 1.04;
+    letter-spacing: -0.045em;
+    color: #ffffff;
+    max-width: 150mm;
+  }
+  .cover .subtitle {
+    margin-top: 5mm;
+    font-size: 13.2pt;
+    line-height: 1.45;
+    color: #cbd5e1;
+    max-width: 145mm;
+  }
+  .cover .rule {
+    width: 40mm;
+    height: 1.4mm;
+    background: #2dd4bf;
+    margin: 9mm 0 7mm;
+    border-radius: 1mm;
+  }
+  .cover .abstract {
+    max-width: 150mm;
+    font-size: 10.3pt;
+    line-height: 1.6;
+    color: #cbd5e1;
+  }
+  .cover .meta {
+    margin-top: 11mm;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4mm 9mm;
+    max-width: 155mm;
+    font-size: 8.6pt;
+  }
+  .cover .meta .k { color: #64748b; text-transform: uppercase; letter-spacing: 0.08em; font-size: 6.9pt; }
+  .cover .meta .v { color: #f1f5f9; margin-top: 0.5mm; font-family: "SFMono-Regular", Menlo, Consolas, monospace; font-size: 8.1pt; }
+  .cover .cover-kpis {
+    margin-top: 12mm;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 4mm;
+    max-width: 165mm;
+  }
+  .cover .cover-kpis .n { font-size: 22pt; font-weight: 750; color: #5eead4; letter-spacing: -0.04em; }
+  .cover .cover-kpis .l { font-size: 6.8pt; letter-spacing: 0.08em; text-transform: uppercase; color: #94a3b8; margin-top: 1mm; }
+  .cover .footer {
+    position: absolute;
+    left: 17mm;
+    right: 17mm;
+    bottom: 14mm;
+    padding-top: 4mm;
+    border-top: 0.4pt solid rgba(148,163,184,0.25);
+    font-size: 7.2pt;
+    color: #94a3b8;
+    display: flex;
+    justify-content: space-between;
+    gap: 10mm;
+  }
+  .status-strip {
+    display: flex;
+    gap: 3mm;
+    flex-wrap: wrap;
+    margin: 4mm 0 5mm;
+  }
+  .status-strip .badge { font-size: 7pt; }
+  .arch {
+    margin: 4mm 0 6mm;
+    padding: 5mm;
+    background: #f8fafc;
+    border: 0.4pt solid #e2e8f0;
+    border-radius: 3mm;
+    break-inside: avoid;
+  }
+  .arch svg { width: 100%; height: auto; display: block; }
+  .step-list { counter-reset: step; list-style: none; margin-left: 0; }
+  .step-list li { counter-increment: step; position: relative; padding-left: 8mm; margin-bottom: 2mm; }
+  .step-list li:before {
+    content: counter(step);
+    position: absolute;
+    left: 0;
+    top: 0.2mm;
+    width: 5.2mm;
+    height: 5.2mm;
+    border-radius: 50%;
+    background: #0f766e;
+    color: #fff;
+    font-size: 7pt;
+    font-weight: 700;
+    text-align: center;
+    line-height: 5.2mm;
+  }
+  .filelist { font-size: 8.3pt; }
+  .filelist td:first-child { font-family: "SFMono-Regular", Menlo, Consolas, monospace; white-space: nowrap; }
+  .two-col-list { columns: 2; column-gap: 9mm; }
+  .two-col-list li { break-inside: avoid; }
+  .end-note {
+    margin-top: 8mm;
+    padding-top: 4mm;
+    border-top: 0.4pt solid #e2e8f0;
+    color: #64748b;
+    font-size: 8pt;
+  }
+  .flow {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 2.6mm;
+    margin: 4mm 0 5mm;
+  }
+  .flow-step {
+    position: relative;
+    padding: 3mm 3.2mm;
+    background: #f8fafc;
+    border: 0.4pt solid #e2e8f0;
+    border-radius: 2mm;
+    font-size: 8.2pt;
+    line-height: 1.45;
+  }
+  .flow-step b { display: block; color: #0f766e; font-size: 8.6pt; margin-bottom: 1mm; }
+  .flow-step:after {
+    content: "→";
+    position: absolute;
+    right: -2.8mm;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #94a3b8;
+    font-size: 10pt;
+  }
+  .flow-step:last-child:after { content: ""; }
+  .timeline {
+    margin: 3mm 0 5mm;
+    padding: 4mm 5mm;
+    background: #0f172a;
+    color: #cbd5e1;
+    border-radius: 2.4mm;
+    font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+    font-size: 7.9pt;
+    line-height: 1.75;
+    break-inside: avoid;
+  }
+  .timeline .t { color: #5eead4; font-weight: 700; }
+  .timeline .e { color: #fbbf24; }
+  .timeline .m { color: #93c5fd; }
+  .timeline .d { color: #fca5a5; }
+  .timeline .ok { color: #86efac; }
+  .table-break { break-inside: auto; }
+  .table-break tr { break-inside: avoid; }
+  .checklist { list-style: none; margin-left: 0; }
+  .checklist li { position: relative; padding-left: 6mm; }
+  .checklist li:before {
+    content: "✓";
+    position: absolute;
+    left: 0;
+    color: #0f766e;
+    font-weight: 800;
+  }
+  .tag {
+    display: inline-block;
+    padding: 0.35mm 1.5mm;
+    border-radius: 1mm;
+    background: #e2e8f0;
+    color: #334155;
+    font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+    font-size: 0.88em;
+  }
+  .tag.ok { background: #ccfbf1; color: #115e59; }
+  .tag.future { background: #f1f5f9; color: #94a3b8; }
+  .sig {
+    font-size: 8.1pt;
+    line-height: 1.6;
+    background: #f8fafc;
+    border: 0.4pt solid #e2e8f0;
+    border-radius: 2.2mm;
+    padding: 3.2mm 4mm;
+    break-inside: avoid;
+  }
+  .sig p { margin: 0 0 1.2mm; }
+  .muted-box {
+    padding: 3.5mm 4.2mm;
+    background: #f8fafc;
+    border: 0.4pt solid #e2e8f0;
+    border-radius: 2.4mm;
+    margin: 3mm 0 4.5mm;
+    break-inside: avoid;
+  }
+  .stat-inline { font-family: "SFMono-Regular", Menlo, Consolas, monospace; font-size: 8.2pt; }
+</style>
+</head>
+<body>
+
+<!-- ============================ COVER ============================ -->
+<section class="cover">
+  <div class="kicker">Engineering report &nbsp;·&nbsp; Stage 1 of 6</div>
+  <h1>Deterministic<br>Simulator</h1>
+  <div class="subtitle">
+    The foundation of <strong style="color:#ffffff">raftkv</strong> — a 5-node replicated key-value
+    database with a from-scratch Raft implementation, built and tested entirely
+    inside a deterministic simulation.
+  </div>
+  <div class="rule"></div>
+  <div class="abstract">
+    This report documents everything constructed through Stage 1: the event-driven
+    simulator, fake clock, fake network, crash-safe fake disk, frozen PRNG, actor
+    lifecycle, canonical trace and state hashing, replayable invariant failures,
+    the ping/journal workload, the command-line runner, and the complete test
+    evidence. It also records the one bug found and fixed and the explicit boundary
+    between what exists today and what belongs to later stages.
+  </div>
+
+  <div class="meta">
+    <div><div class="k">Source revision</div><div class="v">0c7d5fb &nbsp;(main)</div></div>
+    <div><div class="k">Repository</div><div class="v">vaibhavraj082007/Raft-Based-Distributed-Database-Management-System</div></div>
+    <div><div class="k">Toolchain</div><div class="v">Go 1.27.4 &nbsp;·&nbsp; module target 1.24</div></div>
+    <div><div class="k">Document date</div><div class="v">24 November 2026</div></div>
+    <div><div class="k">Status</div><div class="v">Stage 1 complete — awaiting approval</div></div>
+    <div><div class="k">Scope</div><div class="v">No Raft / KV / storage code yet</div></div>
+  </div>
+
+  <div class="cover-kpis">
+    <div><div class="n">41</div><div class="l">Tests passing</div></div>
+    <div><div class="n">100</div><div class="l">Seeds in smoke run</div></div>
+    <div><div class="n">3,120</div><div class="l">Go lines incl. tests</div></div>
+    <div><div class="n">0</div><div class="l">Later-stage code written</div></div>
+  </div>
+
+  <div class="footer">
+    <span>Prepared for Vaibhav Tripathi</span>
+    <span>Simulator version 1 &nbsp;·&nbsp; Trace format level 0</span>
+  </div>
+</section>
+
+<!-- ============================ CONTENTS + SUMMARY ============================ -->
+<section>
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:3mm;">
+    <span class="badge">Document map</span>
+    <span class="tiny mono">v1.0 &nbsp;·&nbsp; snapshot of commit 0c7d5fb</span>
+  </div>
+  <h2>Contents &amp; executive summary</h2>
+
+  <div class="toc">
+    <div><span class="n">01</span> Project vision and architecture</div>
+    <div><span class="n">07</span> Stage 1 workload and CLI</div>
+    <div><span class="n">02</span> Stage 1 requirements and result</div>
+    <div><span class="n">08</span> Code map</div>
+    <div><span class="n">03</span> Simulator architecture</div>
+    <div><span class="n">09</span> Test evidence</div>
+    <div><span class="n">04</span> Component deep dives</div>
+    <div><span class="n">10</span> Bug log — S1-001</div>
+    <div><span class="n">05</span> Determinism and replay</div>
+    <div><span class="n">11</span> Limitations and next stage</div>
+    <div><span class="n">06</span> Observability and invariants</div>
+    <div><span class="n">A–C</span> Appendices</div>
+  </div>
+
+  <p class="lead">
+    Stage 1 delivers the deterministic substrate that all later distributed-systems
+    behavior will run on. It is intentionally not a Raft implementation yet.
+  </p>
+
+  <h3>What was built</h3>
+  <p>
+    A single-threaded discrete-event simulator now owns every source of
+    non-determinism in the system. Simulated time is a logical millisecond counter
+    that advances only when an event is dispatched. A single frozen SplitMix64 PRNG
+    supplies all randomness. A fake network delivers typed messages with latency,
+    drops, directed link blocks, and partitions. A per-node asynchronous fake disk
+    models visible and durable bytes separately, so only an explicit <code>Sync</code>
+    survives a crash. Nodes are actors constructed by factories; a crash discards the
+    node instance, increments an epoch, and guarantees that old messages, timers, and
+    I/O completions can never leak into the restarted node.
+  </p>
+  <p>
+    Around that core, the stage adds canonical text traces, FNV-1a trace and state
+    hashes, rich invariant failures with seed and replay commands, a panic boundary,
+    a 5-node ping/journal workload with a deterministic chaos driver, a <code>simctl</code>
+    command, a checked-in golden trace, 41 tests, and an AST-based guard against
+    non-deterministic APIs.
+  </p>
+
+  <div class="kpis">
+    <div class="kpi"><div class="n">41 / 41</div><div class="l">Tests passing</div></div>
+    <div class="kpi"><div class="n">100</div><div class="l">Seeds without invariant violation</div></div>
+    <div class="kpi"><div class="n">363</div><div class="l">Lines in golden trace</div></div>
+    <div class="kpi"><div class="n">1</div><div class="l">Bug found and fixed</div></div>
+  </div>
+
+  <h3>What is deliberately not built</h3>
+  <p>
+    There is no Raft leader election, log replication, WAL, LSM-tree, key-value API,
+    sharding, transaction layer, SQL, or dashboard. No Stage 2 code exists. The fake
+    disk is a device model, not the production storage engine. The simulator is a
+    correctness harness, not a throughput benchmark.
+  </p>
+
+  <div class="callout">
+    <strong>Key outcome.</strong> The same seed now reproduces byte-identical trace
+    bytes, trace hash, and state hash across fresh simulator instances, interleaved
+    instances, and separate OS processes. A failing seed reports the exact replay
+    command. This is the property every later bug hunt depends on.
+  </div>
+
+  <h3>Verification at a glance</h3>
+  <table>
+    <thead><tr><th>Gate</th><th>Result</th><th>Evidence</th></tr></thead>
+    <tbody>
+      <tr><td>Unit / integration suite</td><td><strong>pass</strong></td><td>41 tests across 3 packages</td></tr>
+      <tr><td>Race detector</td><td><strong>pass</strong></td><td><code>go test -race ./...</code></td></tr>
+      <tr><td>Static analysis</td><td><strong>pass</strong></td><td><code>go vet ./...</code></td></tr>
+      <tr><td>Same-seed repeatability</td><td><strong>pass</strong></td><td><code>-count=5</code>, 3 fresh runs in-test</td></tr>
+      <tr><td>Cross-process replay</td><td><strong>pass</strong></td><td>CLI output byte-equal across processes</td></tr>
+      <tr><td>Golden trace</td><td><strong>pass</strong></td><td><code>testdata/stage1/ping-seed-42.trace</code></td></tr>
+      <tr><td>Determinism API guard</td><td><strong>pass</strong></td><td>AST scan of all simulated packages</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============================ 01 VISION ============================ -->
+<section class="section">
+  <span class="badge">01 &nbsp; Context</span>
+  <h2>Project vision and architecture</h2>
+
+  <p class="lead">
+    The goal is a 5-node replicated key-value database built from first principles:
+    Raft, a write-ahead log, an LSM-tree, a linearizable KV API, and later sharding,
+    transactions, SQL, and a dashboard. The unusual part is not the database; it is
+    the testing method.
+  </p>
+
+  <h3>Why deterministic simulation</h3>
+  <p>
+    Distributed systems fail in rare interleavings: a message arrives after a
+    restart, a leader crashes between a disk write and an RPC reply, a partition
+    heals while a vote is in flight. Reproducing those schedules with real clocks,
+    real sockets, and OS scheduling is unreliable. The project follows the
+    FoundationDB and TigerBeetle approach: put the whole cluster in one process,
+    replace the outside world with deterministic fakes, drive them from one seeded
+    PRNG, and make every run replayable.
+  </p>
+  <p>
+    The simulator is therefore a first-class deliverable, not test scaffolding. It
+    owns time, scheduling, messages, disk durability, node lifecycle, randomness,
+    tracing, and invariant checks. Later layers never reach around it.
+  </p>
+
+  <h3>Build order</h3>
+  <table>
+    <thead><tr><th class="num">Stage</th><th>Layer</th><th>Package</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td class="num">1</td><td><strong>Deterministic simulator</strong> — clock, network, disk, RNG, trace, invariants</td><td><code>internal/sim</code></td><td><span class="badge">Complete</span></td></tr>
+      <tr><td class="num">2</td><td>Raft — leader election, log replication, Figure 2</td><td><code>internal/raft</code></td><td class="muted">Not started</td></tr>
+      <tr><td class="num">3</td><td>Storage engine — WAL, then LSM-tree</td><td><code>internal/storage</code></td><td class="muted">Not started</td></tr>
+      <tr><td class="num">4</td><td>Linearizable KV API with client request IDs and deduplication</td><td><code>internal/kv</code></td><td class="muted">Not started</td></tr>
+      <tr><td class="num">5</td><td>Sharding and multi-shard transactions</td><td>TBD</td><td class="muted">Not started</td></tr>
+      <tr><td class="num">6</td><td>Tiny SQL layer and React + WebSocket dashboard</td><td>TBD</td><td class="muted">Not started</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Rules that govern every layer</h3>
+  <div class="grid2">
+    <div class="card">
+      <h4>Determinism</h4>
+      <ul>
+        <li>One seeded PRNG per simulation, consumed in event order.</li>
+        <li>Logical <code>Tick</code> milliseconds; no wall clock.</li>
+        <li>Stable event ordering by <code>(tick, sequence)</code>.</li>
+        <li>No goroutines, channels, real timers, real sockets, or global RNG.</li>
+        <li>No map iteration where order affects behavior or output.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>Correctness</h4>
+      <ul>
+        <li>Invariants run after every simulation step.</li>
+        <li>Persist term, vote, and log before replying (later stage).</li>
+        <li>Crash discards volatile state; only durable bytes survive.</li>
+        <li>Failures report seed, version, step, event, and replay command.</li>
+        <li>Later stages may import <code>internal/sim</code>; never the reverse.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>Invariants reserved for later stages</h3>
+  <p>
+    The Stage 1 framework is generic and stateful. When Raft and the KV layer arrive,
+    the same hook will check: only one leader per term; no two nodes disagree about a
+    committed log entry; committed entries never disappear; and a bank workload with
+    100 accounts × 1,000 always sums to 100,000. Those checks are not implemented yet
+    because the objects they inspect do not exist yet.
+  </p>
+
+  <div class="callout warn">
+    <strong>Stage boundary.</strong> Stage 1 ends at a tested simulator and a toy
+    workload. It does not claim Raft correctness, linearizability, or durable
+    production storage. Moving on requires explicit approval.
+  </div>
+</section>
+
+<!-- ============================ 02 REQUIREMENTS ============================ -->
+<section class="section">
+  <span class="badge">02 &nbsp; Acceptance</span>
+  <h2>Stage 1 requirements and result</h2>
+
+  <p class="lead">
+    Stage 1 was specified in <code>PLAN.md</code> and implemented against that
+    specification. The checks below are the definition of done from the plan, with
+    the evidence that closes each one.
+  </p>
+
+  <table>
+    <thead><tr><th style="width:34%">Requirement</th><th>Delivered evidence</th><th style="width:12%">Status</th></tr></thead>
+    <tbody>
+      <tr><td>Logical clock advances only through events</td><td><code>Tick</code> + stable event queue; idle-run and ordering tests</td><td><strong>Met</strong></td></tr>
+      <tr><td>Fake network with drops, delays, partitions</td><td>Directional block set, send/delivery re-checks, epoch filtering, payload copies</td><td><strong>Met</strong></td></tr>
+      <tr><td>Fake crash-safe disk</td><td>Async FIFO device; visible vs durable; only <code>Sync</code> survives crash</td><td><strong>Met</strong></td></tr>
+      <tr><td>Single seeded RNG</td><td>In-repo SplitMix64; golden vectors; one instance per <code>Sim</code></td><td><strong>Met</strong></td></tr>
+      <tr><td>Node crash / restart lifecycle</td><td>Fresh factory instance, epoch invalidation, timer and I/O filtering</td><td><strong>Met</strong></td></tr>
+      <tr><td>Canonical trace and replay</td><td>FNV-1a trace hash, state hash, trace tail, seed/config replay command</td><td><strong>Met</strong></td></tr>
+      <tr><td>Invariant after every step</td><td>Registry runs after every dispatch plus a final check; failure and panic capture</td><td><strong>Met</strong></td></tr>
+      <tr><td>Same seed = identical output</td><td>Fresh runs, interleaved runs, cross-process CLI, golden trace</td><td><strong>Met</strong></td></tr>
+      <tr><td>Chaos scenario and CLI</td><td>5-node ping/journal scenario; <code>cmd/simctl</code> with seed and tick controls</td><td><strong>Met</strong></td></tr>
+      <tr><td>Static determinism guard</td><td>AST test rejects real time, goroutines, channels, net, global RNG</td><td><strong>Met</strong></td></tr>
+      <tr><td>100-seed smoke run</td><td><code>Test100SeedSmoke</code> passes in well under the 10 s budget</td><td><strong>Met</strong></td></tr>
+      <tr><td>No Stage 2+ code</td><td><code>internal/raft</code>, <code>storage</code>, <code>kv</code> contain only placeholders</td><td><strong>Met</strong></td></tr>
+    </tbody>
+  </table>
+
+  <h3>Original Stage 1 acceptance test</h3>
+  <p>
+    The required proof was that the same seed always produces identical output.
+    The primary regression test is <code>TestSameSeedProducesIdenticalTrace</code>,
+    supported by <code>TestInterleavedSimsDoNotShareState</code>,
+    <code>TestGoldenTraceSeed42</code>, and <code>TestCLIReplayAcrossProcesses</code>.
+    The entire suite also passes with <code>-count=5</code>.
+  </p>
+
+  <h3>Simulation versioning</h3>
+  <p>
+    Traces carry <code>sim v=1</code>. The version is bumped when a semantic change
+    alters RNG consumption, event ordering, or trace format. Exact replay is defined
+    for one binary, config, scenario, and seed. Reproducing an old cross-version
+    failure requires checking out the recorded commit. This trade-off is explicit:
+    one RNG stream keeps the model simple, while versioning keeps replay honest.
+  </p>
+
+  <div class="callout">
+    <strong>Current state:</strong> Stage 1 is implemented, tested, committed, and
+    pushed. Stage 2 has not begun.
+  </div>
+</section>
+
+<!-- ============================ 03 ARCHITECTURE ============================ -->
+<section class="section">
+  <span class="badge">03 &nbsp; Architecture</span>
+  <h2>Simulator architecture</h2>
+
+  <p class="lead">
+    Stage 1 behaves like a tiny operating system for one process. It owns the
+    clock, the run queue, every byte of simulated I/O, every random draw, and the
+    lifecycle of every node. Application code is a set of passive actors that can
+    only act through the capability surface the simulator hands them.
+  </p>
+
+  <div class="arch">
+    <svg viewBox="0 0 1000 500" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Stage 1 software architecture">
+      <defs>
+        <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+          <path d="M0,0 L0,6 L9,3 z" fill="#64748b"/>
+        </marker>
+      </defs>
+      <style>
+        .box { stroke-width: 1; }
+        .label { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+        .mono { font-family: "SFMono-Regular", Menlo, Consolas, monospace; }
+      </style>
+
+      <rect x="350" y="8" width="300" height="50" rx="8" fill="#0f172a" class="box" stroke="#0f172a"/>
+      <text x="500" y="31" text-anchor="middle" fill="#ffffff" font-size="14" font-weight="700" class="mono">cmd/simctl</text>
+      <text x="500" y="47" text-anchor="middle" fill="#94a3b8" font-size="9.5" class="label">seed · scenario · ticks · trace</text>
+
+      <line x1="500" y1="58" x2="500" y2="82" stroke="#64748b" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+      <rect x="205" y="84" width="590" height="58" rx="8" fill="#f0fdfa" stroke="#99f6e4"/>
+      <text x="500" y="106" text-anchor="middle" fill="#115e59" font-size="13.5" font-weight="700" class="mono">internal/scenarios · ping</text>
+      <text x="500" y="124" text-anchor="middle" fill="#334155" font-size="9.5" class="label">5 PingNodes · journal workload · deterministic chaos driver · recovery invariant</text>
+
+      <line x1="500" y1="142" x2="500" y2="166" stroke="#64748b" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+      <rect x="35" y="168" width="930" height="196" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+      <text x="55" y="191" fill="#0f172a" font-size="12.5" font-weight="750" class="mono">internal/sim — the deterministic core</text>
+      <text x="945" y="191" text-anchor="end" fill="#64748b" font-size="8.5" class="label">single-threaded · event-driven</text>
+
+      <g font-size="10" class="mono" text-anchor="middle">
+        <rect x="55" y="207" width="135" height="52" rx="5" fill="#ffffff" stroke="#e2e8f0"/>
+        <text x="122" y="228" fill="#0f172a" font-weight="700">event queue</text>
+        <text x="122" y="244" fill="#64748b" font-size="8">(tick, sequence)</text>
+
+        <rect x="200" y="207" width="125" height="52" rx="5" fill="#ffffff" stroke="#e2e8f0"/>
+        <text x="262" y="228" fill="#0f172a" font-weight="700">logical clock</text>
+        <text x="262" y="244" fill="#64748b" font-size="8">Tick · milliseconds</text>
+
+        <rect x="335" y="207" width="125" height="52" rx="5" fill="#ffffff" stroke="#e2e8f0"/>
+        <text x="397" y="228" fill="#0f172a" font-weight="700">frozen RNG</text>
+        <text x="397" y="244" fill="#64748b" font-size="8">SplitMix64 · one stream</text>
+
+        <rect x="470" y="207" width="150" height="52" rx="5" fill="#ffffff" stroke="#e2e8f0"/>
+        <text x="545" y="228" fill="#0f172a" font-weight="700">tracer + hashes</text>
+        <text x="545" y="244" fill="#64748b" font-size="8">canonical text · FNV-1a</text>
+
+        <rect x="630" y="207" width="135" height="52" rx="5" fill="#ffffff" stroke="#e2e8f0"/>
+        <text x="697" y="228" fill="#0f172a" font-weight="700">invariants</text>
+        <text x="697" y="244" fill="#64748b" font-size="8">after every step</text>
+
+        <rect x="775" y="207" width="170" height="52" rx="5" fill="#ffffff" stroke="#e2e8f0"/>
+        <text x="860" y="228" fill="#0f172a" font-weight="700">node registry</text>
+        <text x="860" y="244" fill="#64748b" font-size="8">epochs · factories · timers</text>
+
+        <rect x="55" y="275" width="210" height="64" rx="5" fill="#ffffff" stroke="#e2e8f0"/>
+        <text x="160" y="297" fill="#0f172a" font-weight="700">fake network</text>
+        <text x="160" y="312" fill="#64748b" font-size="8">latency · drops · partitions</text>
+        <text x="160" y="326" fill="#64748b" font-size="8">payload clones · epoch checks</text>
+
+        <rect x="277" y="275" width="210" height="64" rx="5" fill="#ffffff" stroke="#e2e8f0"/>
+        <text x="382" y="297" fill="#0f172a" font-weight="700">fake disk / node</text>
+        <text x="382" y="312" fill="#64748b" font-size="8">async FIFO · visible + durable</text>
+        <text x="382" y="326" fill="#64748b" font-size="8">only Sync survives a crash</text>
+
+        <rect x="499" y="275" width="210" height="64" rx="5" fill="#ffffff" stroke="#e2e8f0"/>
+        <text x="604" y="297" fill="#0f172a" font-weight="700">node actors</text>
+        <text x="604" y="312" fill="#64748b" font-size="8">HandleMessage / Timer / IO</text>
+        <text x="604" y="326" fill="#64748b" font-size="8">all capability via Env</text>
+
+        <rect x="721" y="275" width="224" height="64" rx="5" fill="#ffffff" stroke="#e2e8f0"/>
+        <text x="833" y="297" fill="#0f172a" font-weight="700">stats + failure artifacts</text>
+        <text x="833" y="312" fill="#64748b" font-size="8">seed · step · event · trace tail</text>
+        <text x="833" y="326" fill="#64748b" font-size="8">replay command · panic capture</text>
+      </g>
+
+      <line x1="500" y1="364" x2="500" y2="394" stroke="#64748b" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+      <rect x="145" y="397" width="710" height="54" rx="8" fill="#0f172a" stroke="#0f172a"/>
+      <text x="500" y="418" text-anchor="middle" fill="#e2e8f0" font-size="11" font-weight="700" class="mono">canonical trace · trace hash · state hash · replayable failure</text>
+      <text x="500" y="436" text-anchor="middle" fill="#94a3b8" font-size="9" class="label">the only artifacts that leave a run</text>
+
+      <text x="500" y="478" text-anchor="middle" fill="#0f766e" font-size="9.5" font-weight="700" class="label">no goroutines · no channels · no wall clock · no real sockets · no global RNG</text>
+    </svg>
+  </div>
+
+  <h3>Package boundaries</h3>
+  <p>
+    Dependencies point in one direction: <code>cmd/simctl</code> depends on
+    <code>internal/scenarios</code>, which depends on <code>internal/sim</code>.
+    <code>internal/sim</code> has no project-internal dependencies and imports only
+    the Go standard library. Later layers will be allowed to import
+    <code>internal/sim</code>; <code>internal/sim</code> will never import them.
+    This preserves the simulator as an external correctness harness rather than a
+    framework that can be bent to hide a bug.
+  </p>
+
+  <table>
+    <thead><tr><th style="width:25%">Component</th><th>Responsibility</th><th style="width:30%">Determinism mechanism</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Clock</strong></td><td>Advance simulated time only by dispatching the next event.</td><td>Logical <code>Tick</code>; no wall clock.</td></tr>
+      <tr><td><strong>Event queue</strong></td><td>Order all boots, timers, sends, deliveries, I/O completions, chaos actions, and the finalizer.</td><td>Stable min-heap on <code>(at, seq)</code>.</td></tr>
+      <tr><td><strong>Randomness</strong></td><td>Supply every random choice: peer selection, timer jitter, network latency, drops, and chaos.</td><td>One frozen SplitMix64 stream per simulation.</td></tr>
+      <tr><td><strong>Network</strong></td><td>Deliver typed messages with latency jitter, packet loss, partitions, and epoch safety.</td><td>Draws from the one RNG in send order; delivery is another event.</td></tr>
+      <tr><td><strong>Disk</strong></td><td>Model asynchronous per-node files with visible and durable bytes.</td><td>FIFO issue order; completion events; epoch-filtered after a crash.</td></tr>
+      <tr><td><strong>Lifecycle</strong></td><td>Boot, crash, and restart nodes; discard volatile node state; preserve only durable disk state.</td><td>Fresh factory instance and monotonically increasing boot epoch.</td></tr>
+      <tr><td><strong>Trace</strong></td><td>Record every behavior-relevant decision and produce a replay artifact.</td><td>Explicit ASCII fields; no maps, pointers, floats, or timestamps from the OS.</td></tr>
+      <tr><td><strong>Invariants</strong></td><td>Check structural and scenario properties after every event and at the end.</td><td>Registration order; checks are pure and cannot draw randomness.</td></tr>
+      <tr><td><strong>Failure</strong></td><td>Turn a violation or panic into a deterministic report with a replay command.</td><td>Seed, scenario, version, step, tick, event, cause, trace tail.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>The execution loop</h3>
+  <div class="flow">
+    <div class="flow-step"><b>1 · Schedule</b>Assign the next sequence number and insert an event by <code>(at, seq)</code>.</div>
+    <div class="flow-step"><b>2 · Pop</b>Take the earliest event; set <code>Now()</code> to its tick; increment the step counter.</div>
+    <div class="flow-step"><b>3 · Trace</b>Write the event record before the handler runs.</div>
+    <div class="flow-step"><b>4 · Dispatch</b>Invoke scenario logic or node callback. New work becomes new events.</div>
+    <div class="flow-step"><b>5 · Check</b>Run structural checks and every invariant, then update hashes and continue.</div>
+  </div>
+
+  <p>
+    There is no scheduler race and no hidden concurrency. A node can only send a
+    message, schedule a timer, issue disk I/O, or draw randomness through
+    <code>Env</code>. It cannot reach the simulator, another node, the host clock, or
+    the real filesystem. The simulator owns the network and disk and can therefore
+    re-check conditions at both send time and delivery time.
+  </p>
+
+  <div class="callout">
+    <strong>Architectural rule.</strong> Any behavior that can affect the trace, the
+    final state, or a failure must be an event. Test setup is the only exception,
+    and it happens before the run starts.
+  </div>
+</section>
+
+<!-- ============================ 04 COMPONENTS ============================ -->
+<section class="section">
+  <span class="badge">04 &nbsp; Components</span>
+  <h2>Component deep dives</h2>
+
+  <p class="lead">
+    Each subsystem below is deliberately small. The goal is not to model every
+    detail of a real operating system; it is to preserve the failure modes that a
+    Raft implementation must survive, while making each one replayable.
+  </p>
+
+  <h3>4.1 Logical clock and event queue</h3>
+  <p>
+    Simulated time is <code>type Tick int64</code>, measured in simulated
+    milliseconds. It jumps directly to the next event; it never advances while the
+    queue is idle. Every event has an absolute tick and a monotonically increasing
+    sequence number. Same-tick events therefore execute in scheduling order, and an
+    event scheduled during another dispatch at the same tick runs later, never
+    immediately.
+  </p>
+  <table>
+    <thead><tr><th style="width:24%">Entry point</th><th>Semantics</th></tr></thead>
+    <tbody>
+      <tr><td><code>RunUntil(t)</code></td><td>Dispatch every event with <code>at &lt;= t</code>; if the queue empties first, advance the clock to <code>t</code>.</td></tr>
+      <tr><td><code>RunSteps(n)</code></td><td>Dispatch at most <code>n</code> events, then run the final invariant check.</td></tr>
+      <tr><td><code>RunUntilIdle()</code></td><td>Drain the queue completely, then run the final invariant check.</td></tr>
+      <tr><td><code>ScheduleFunc(at, name, fn)</code></td><td>Scenario-controlled event insertion. Past scheduling is rejected.</td></tr>
+      <tr><td><code>After(delay, tag)</code></td><td>Node timer insertion. Timer cancellation is supported; stale timers are ignored.</td></tr>
+    </tbody>
+  </table>
+  <p>
+    Default guards are one million steps and one billion ticks. A run that reaches
+    either limit fails with a replayable <code>Failure</code> instead of hanging.
+    An event scheduled in the past is rejected; a queue that somehow contains one is
+    caught by the structural invariant check.
+  </p>
+
+  <h3>4.2 Randomness</h3>
+  <p>
+    The simulator uses a frozen in-repo SplitMix64 generator rather than
+    <code>math/rand</code>. This removes any dependency on a Go release's internal
+    algorithm or seeding behavior. There is exactly one generator per
+    <code>Sim</code>, and every draw is made during event dispatch in queue order.
+  </p>
+  <pre><code>func (r *Rand) Uint64() uint64 {
+    r.state += 0x9e3779b97f4a7c15
+    z := r.state
+    z = (z ^ (z &gt;&gt; 30)) * 0xbf58476d1ce4e5b9
+    z = (z ^ (z &gt;&gt; 27)) * 0x94d049bb133111eb
+    return z ^ (z &gt;&gt; 31)
+}</code></pre>
+  <p>
+    Integer ranges are inclusive and use unbiased rejection sampling. A
+    <code>Chance(0)</code> or <code>Chance(1000)</code> returns without consuming a
+    draw, which is itself a stable rule. Golden-vector tests pin the first outputs
+    for known seeds, so an accidental algorithm change is caught immediately.
+  </p>
+  <table>
+    <thead><tr><th>Seed</th><th>First three <code>Uint64</code> outputs</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">0</td><td class="mono">e220a8397b1dcdaf · 6e789e6aa1b965f4 · 06c45d188009454f</td></tr>
+      <tr><td class="mono">42</td><td class="mono">bdd732262feb6e95 · 28efe333b266f103 · 47526757130f9f52</td></tr>
+    </tbody>
+  </table>
+
+  <h3>4.3 Fake network</h3>
+  <p>
+    <code>Send</code> is asynchronous and returns immediately. The network records
+    the send, clones the payload, samples an inclusive latency in
+    <code>[min, max]</code>, and schedules a delivery event tagged with the
+    destination's current boot epoch. Delivery re-checks liveness, epoch, and
+    partition state, so a partition forming while a message is in flight is still
+    enforced.
+  </p>
+  <div class="timeline">
+    <span class="t">t=11</span> &nbsp;<span class="m">send</span> from=4 to=2 kind=ping bytes=8<br>
+    <span class="t">t=11</span> &nbsp;<span class="d">drop</span> from=4 to=2 kind=ping reason=partition<br>
+    <span class="t">t=31</span> &nbsp;<span class="m">send</span> from=2 to=5 kind=pong bytes=8<br>
+    <span class="t">t=33</span> &nbsp;<span class="ok">recv</span> from=2 to=5 kind=pong bytes=8
+  </div>
+  <table>
+    <thead><tr><th>Drop point</th><th>Reason</th><th>What it proves</th></tr></thead>
+    <tbody>
+      <tr><td>Send</td><td><code>unknown-node</code></td><td>Actor code cannot address an unregistered peer.</td></tr>
+      <tr><td>Send</td><td><code>down</code></td><td>A crashed receiver does not accept new messages.</td></tr>
+      <tr><td>Send / delivery</td><td><code>partition</code></td><td>Directed blocks are enforced even for messages already in flight.</td></tr>
+      <tr><td>Send</td><td><code>loss</code></td><td>The configured per-mille drop rate is sampled from the one RNG.</td></tr>
+      <tr><td>Delivery</td><td><code>stale-epoch</code></td><td>A message from before a restart can never enter the new incarnation.</td></tr>
+    </tbody>
+  </table>
+  <p>
+    Partitions are a set of directed blocked links. <code>Block</code> and
+    <code>Unblock</code> manipulate one direction; <code>Partition</code> blocks
+    every cross-group direction; <code>Isolate</code> blocks every link touching a
+    node; <code>HealAll</code> clears the set. Defaults are 1–4 ticks of latency and
+    no loss.
+  </p>
+
+  <h3>4.4 Fake crash-safe disk</h3>
+  <p>
+    Each node owns one asynchronous disk device. Operations are processed serially
+    in issue order, with a configurable latency. Every file has two byte views:
+    <strong>visible</strong> bytes that reads see, including completed but unsynced
+    writes, and <strong>durable</strong> bytes that survive a crash. A completed
+    <code>Sync</code> copies every file's visible bytes into its durable bytes.
+  </p>
+  <div class="arch">
+    <svg viewBox="0 0 1000 245" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Crash-safe disk model">
+      <defs>
+        <marker id="arrow2" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+          <path d="M0,0 L0,6 L9,3 z" fill="#64748b"/>
+        </marker>
+      </defs>
+      <rect x="20" y="92" width="170" height="60" rx="7" fill="#0f172a"/>
+      <text x="105" y="116" text-anchor="middle" fill="#ffffff" font-size="12" font-weight="700" font-family="-apple-system, Segoe UI, sans-serif">node</text>
+      <text x="105" y="134" text-anchor="middle" fill="#94a3b8" font-size="9" font-family="SFMono-Regular, Menlo, monospace">Env.Device</text>
+
+      <line x1="190" y1="122" x2="245" y2="122" stroke="#64748b" stroke-width="1.2" marker-end="url(#arrow2)"/>
+      <text x="218" y="112" text-anchor="middle" fill="#64748b" font-size="8">issue</text>
+
+      <rect x="247" y="72" width="190" height="100" rx="7" fill="#f8fafc" stroke="#cbd5e1"/>
+      <text x="342" y="95" text-anchor="middle" fill="#0f172a" font-size="11" font-weight="700" font-family="-apple-system, Segoe UI, sans-serif">per-node FIFO</text>
+      <text x="342" y="113" text-anchor="middle" fill="#64748b" font-size="8.5" font-family="SFMono-Regular, Menlo, monospace">read · append · replace</text>
+      <text x="342" y="128" text-anchor="middle" fill="#64748b" font-size="8.5" font-family="SFMono-Regular, Menlo, monospace">sync · list</text>
+      <text x="342" y="150" text-anchor="middle" fill="#64748b" font-size="8">busyUntil · one op at a time</text>
+
+      <line x1="437" y1="122" x2="492" y2="122" stroke="#64748b" stroke-width="1.2" marker-end="url(#arrow2)"/>
+
+      <rect x="494" y="38" width="210" height="76" rx="7" fill="#f0fdfa" stroke="#99f6e4"/>
+      <text x="599" y="61" text-anchor="middle" fill="#115e59" font-size="11" font-weight="700" font-family="-apple-system, Segoe UI, sans-serif">visible bytes</text>
+      <text x="599" y="79" text-anchor="middle" fill="#334155" font-size="8.5" font-family="SFMono-Regular, Menlo, monospace">completed writes</text>
+      <text x="599" y="94" text-anchor="middle" fill="#334155" font-size="8.5" font-family="SFMono-Regular, Menlo, monospace">reads see these</text>
+
+      <rect x="494" y="130" width="210" height="76" rx="7" fill="#0f172a" stroke="#0f172a"/>
+      <text x="599" y="153" text-anchor="middle" fill="#ffffff" font-size="11" font-weight="700" font-family="-apple-system, Segoe UI, sans-serif">durable bytes</text>
+      <text x="599" y="171" text-anchor="middle" fill="#cbd5e1" font-size="8.5" font-family="SFMono-Regular, Menlo, monospace">survive crash</text>
+      <text x="599" y="186" text-anchor="middle" fill="#5eead4" font-size="8.5" font-family="SFMono-Regular, Menlo, monospace">only Sync promotes</text>
+
+      <line x1="704" y1="76" x2="744" y2="76" stroke="#64748b" stroke-width="1.2" marker-end="url(#arrow2)"/>
+      <line x1="704" y1="168" x2="744" y2="168" stroke="#64748b" stroke-width="1.2" marker-end="url(#arrow2)"/>
+      <text x="724" y="65" text-anchor="middle" fill="#0f766e" font-size="8.5" font-weight="700">sync</text>
+      <text x="724" y="191" text-anchor="middle" fill="#b91c1c" font-size="8.5" font-weight="700">crash</text>
+
+      <rect x="746" y="38" width="234" height="76" rx="7" fill="#ffffff" stroke="#e2e8f0"/>
+      <text x="863" y="61" text-anchor="middle" fill="#0f172a" font-size="11" font-weight="700" font-family="-apple-system, Segoe UI, sans-serif">fresh incarnation</text>
+      <text x="863" y="79" text-anchor="middle" fill="#64748b" font-size="8.5" font-family="SFMono-Regular, Menlo, monospace">reads durable bytes</text>
+      <text x="863" y="94" text-anchor="middle" fill="#64748b" font-size="8.5" font-family="SFMono-Regular, Menlo, monospace">everything else is gone</text>
+
+      <rect x="746" y="130" width="234" height="76" rx="7" fill="#ffffff" stroke="#e2e8f0"/>
+      <text x="863" y="153" text-anchor="middle" fill="#0f172a" font-size="11" font-weight="700" font-family="-apple-system, Segoe UI, sans-serif">stale completions</text>
+      <text x="863" y="171" text-anchor="middle" fill="#64748b" font-size="8.5" font-family="SFMono-Regular, Menlo, monospace">epoch mismatch → dropped</text>
+      <text x="863" y="186" text-anchor="middle" fill="#64748b" font-size="8.5" font-family="SFMono-Regular, Menlo, monospace">never delivered to new node</text>
+    </svg>
+  </div>
+  <p>
+    The visible view makes read-your-writes work before a sync. A crash cancels all
+    pending operations, discards old completion events by epoch, and reverts every
+    visible file to its durable bytes. Restart constructs a new node over the same
+    durable disk. A sync atomically persists every preceding append in every file;
+    there are no torn writes or bit rot in Stage 1.
+  </p>
+  <table>
+    <thead><tr><th style="width:16%">Operation</th><th>Visible effect</th><th>Durable effect</th></tr></thead>
+    <tbody>
+      <tr><td><code>Read</code></td><td>Returns bytes from the visible file, truncated at EOF; missing file yields empty bytes.</td><td>None.</td></tr>
+      <tr><td><code>Append</code></td><td>Appends atomically to the visible file.</td><td>None until a later <code>Sync</code> completes.</td></tr>
+      <tr><td><code>Replace</code></td><td>Replaces the visible file atomically.</td><td>None until a later <code>Sync</code> completes.</td></tr>
+      <tr><td><code>Sync</code></td><td>No data change.</td><td>Copies every visible file to durable storage.</td></tr>
+      <tr><td><code>List</code></td><td>Returns sorted <code>name&lt;TAB&gt;size</code> lines of visible files.</td><td>None.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>4.5 Node lifecycle and epochs</h3>
+  <p>
+    A node is not a persistent Go object. It is an incarnation produced by a
+    factory. The simulator calls <code>factory(env)</code> on boot, stores the
+    resulting actor, and then calls <code>Start()</code>. On crash, the actor and its
+    environment are discarded, the epoch increments, timers are removed, and the
+    disk reverts to durable data. Restart calls the factory again.
+  </p>
+  <div class="flow">
+    <div class="flow-step"><b>Boot</b>Factory creates a fresh actor with a new <code>Env</code>.</div>
+    <div class="flow-step"><b>Run</b>Callbacks mutate only actor state and issue events.</div>
+    <div class="flow-step"><b>Crash</b>Epoch++, actor nil, timers canceled, disk reverted.</div>
+    <div class="flow-step"><b>Stale</b>Old messages, timers, and I/O completions are filtered.</div>
+    <div class="flow-step"><b>Restart</b>Factory runs again; only durable disk survives.</div>
+  </div>
+  <table>
+    <thead><tr><th>Artifact</th><th>Carries epoch?</th><th>After restart</th></tr></thead>
+    <tbody>
+      <tr><td>Network delivery</td><td>Yes, destination epoch at send time</td><td>Dropped with <code>stale-epoch</code>.</td></tr>
+      <tr><td>Timer</td><td>Yes, owner epoch</td><td>Canceled on crash; any stale delivery is ignored.</td></tr>
+      <tr><td>Disk completion</td><td>Yes, issuing epoch</td><td>Dropped as stale; pending operations were canceled.</td></tr>
+      <tr><td>Node memory</td><td>No, intentionally not</td><td>Gone. A fresh factory instance starts from durable bytes.</td></tr>
+    </tbody>
+  </table>
+  <p>
+    Panics inside a node callback or boot are caught at the dispatch boundary and
+    converted into a deterministic <code>Failure</code> containing the panic text,
+    a Go stack trace, and the usual replay information. A panic is therefore a
+    finding, not a crashed test process.
+  </p>
+
+  <h3>4.6 Canonical trace, hashes, and replay</h3>
+  <p>
+    The trace is canonical UTF-8 text, one event per line, with explicit fields.
+    Nothing is printed with Go's default map or pointer formatting. The first line
+    names the simulation version, seed, scenario, and trace level. Each record
+    carries the simulated tick and step count, followed by a type-specific payload.
+  </p>
+  <pre><code>sim v=1 seed=42 scenario=ping level=0
+t=0 step=0 nodes=1,2,3,4,5
+t=0 step=1 event seq=1 kind=boot desc=node=1
+t=0 step=1 boot node=1 epoch=0
+t=0 step=6 event seq=6 kind=scenario desc=chaos
+t=0 step=6 partition groups=1,2|3,4,5
+t=11 step=12 send from=4 to=2 kind=ping bytes=8
+t=11 step=12 drop from=4 to=2 kind=ping reason=partition</code></pre>
+  <p>
+    The rolling <strong>trace hash</strong> is FNV-1a 64 over the exact bytes
+    written. The <strong>state hash</strong> is a separate canonical digest over the
+    simulation version, seed, scenario, clock, step, event and timer sequence
+    counters, RNG state, node order and liveness, epochs, node snapshots, sorted
+    timers, sorted blocked links, sorted disk files with visible and durable bytes,
+    the queued events, and the statistics counters. Both are printed by the CLI and
+    compared by tests.
+  </p>
+  <div class="grid2">
+    <div class="card">
+      <h4>Trace levels</h4>
+      <ul>
+        <li><code>events</code> — behavior records: boot, send, receive, drop, partition, disk completion, chaos, crash, restart.</li>
+        <li><code>decisions</code> — adds every RNG draw with its label and value, for deep debugging.</li>
+      </ul>
+      <p class="small muted">The golden trace is checked in at level <code>events</code>. The hash covers whatever level is enabled.</p>
+    </div>
+    <div class="card">
+      <h4>Failure artifact</h4>
+      <ul>
+        <li>Seed, scenario, simulation version.</li>
+        <li>Step, tick, and triggering event.</li>
+        <li>Failed invariant and cause.</li>
+        <li>Last 40 trace lines.</li>
+        <li>Exact replay command.</li>
+      </ul>
+      <p class="small muted">Panics add a Go stack trace inside the cause.</p>
+    </div>
+  </div>
+
+  <h3>4.7 Invariants</h3>
+  <p>
+    Invariants run after every dispatched event and once after each run API returns.
+    They receive the simulator but may not mutate it, draw randomness, or schedule
+    events. A panic inside an invariant becomes a normal failure. The structural
+    checks are always enabled: no negative time, no event in the past, and a valid
+    queue.
+  </p>
+  <table>
+    <thead><tr><th>Invariant</th><th>Stage</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td>Non-decreasing time and no past events</td><td>1</td><td><span class="tag ok">active</span></td></tr>
+      <tr><td>Ping recovery ≤ cumulatively synced records per node</td><td>1</td><td><span class="tag ok">active</span></td></tr>
+      <tr><td>One leader per term</td><td>2</td><td><span class="tag future">later</span></td></tr>
+      <tr><td>No committed-log disagreement across nodes</td><td>2–3</td><td><span class="tag future">later</span></td></tr>
+      <tr><td>Committed entries never disappear</td><td>3</td><td><span class="tag future">later</span></td></tr>
+      <tr><td>Bank total always 100,000</td><td>4</td><td><span class="tag future">later</span></td></tr>
+    </tbody>
+  </table>
+  <p>
+    The Stage 1 recovery invariant is stateful: it remembers, per node, how many
+    sync completions have been observed in every incarnation. A restart may recover
+    at most that cumulative count. This is the invariant that exposed bug S1-001.
+  </p>
+</section>
+
+<!-- ============================ 05 DETERMINISM ============================ -->
+<section class="section">
+  <span class="badge">05 &nbsp; Reproducibility</span>
+  <h2>Determinism and replay</h2>
+
+  <p class="lead">
+    Determinism is a property of the whole run, not a feature of the RNG. It requires
+    a single source for time, scheduling, randomness, I/O, lifecycle, and output
+    encoding. Stage 1 tests each link in that chain and then tests the chain
+    end-to-end.
+  </p>
+
+  <h3>The contract</h3>
+  <p>
+    A run is reproducible when the simulation version, binary, seed, scenario, and
+    configuration are identical, all random draws come from the single simulator
+    RNG in event order, all ordering is by <code>(tick, sequence)</code> or an
+    explicitly sorted key, and all output is canonical. The trace records the
+    version because exact replay is defined per version: a semantic change that
+    alters draw order or event ordering requires a version bump and the original
+    commit for cross-version reproduction.
+  </p>
+
+  <div class="flow">
+    <div class="flow-step"><b>Seed</b>One <code>uint64</code> initializes the frozen SplitMix64 stream.</div>
+    <div class="flow-step"><b>Event order</b>One heap orders all work by <code>(tick, seq)</code>.</div>
+    <div class="flow-step"><b>No ambient input</b>No wall clock, OS scheduling, env, filesystem, or sockets.</div>
+    <div class="flow-step"><b>Canonical output</b>Explicit fields, sorted keys, no maps or pointers.</div>
+    <div class="flow-step"><b>Artifact</b>Trace bytes, trace hash, state hash, and replay command.</div>
+  </div>
+
+  <h3>Four levels of evidence</h3>
+  <table>
+    <thead><tr><th style="width:26%">Level</th><th>Test</th><th>What it rules out</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Fresh in-process runs</strong></td><td><code>TestSameSeedProducesIdenticalTrace</code></td><td>Hidden state left over between runs; nondeterministic RNG or event order.</td></tr>
+      <tr><td><strong>Interleaved simulators</strong></td><td><code>TestInterleavedSimsDoNotShareState</code></td><td>Global mutable state, shared RNG, package-level counters.</td></tr>
+      <tr><td><strong>Separate OS processes</strong></td><td><code>TestCLIReplayAcrossProcesses</code></td><td>Process-local memory layout or run-order dependence.</td></tr>
+      <tr><td><strong>Checked-in golden trace</strong></td><td><code>TestGoldenTraceSeed42</code></td><td>Accidental behavior or format changes that pass a same-run comparison.</td></tr>
+      <tr><td><strong>Seed sweep</strong></td><td><code>Test100SeedSmoke</code></td><td>A single lucky seed; invariant violations across many chaos schedules.</td></tr>
+      <tr><td><strong>Static API guard</strong></td><td><code>TestNoForbiddenAPIs</code></td><td>Real time, goroutines, channels, real networking, global RNG.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>What the hashes cover</h3>
+  <div class="grid2">
+    <div class="card">
+      <h4>Trace hash</h4>
+      <p>
+        FNV-1a 64 over the exact trace bytes. It detects any change in the sequence
+        of recorded events, fields, or formatting. Tests compare both the byte
+        buffer and the hash, so a hash collision cannot hide a difference.
+      </p>
+    </div>
+    <div class="card">
+      <h4>State hash</h4>
+      <p>
+        A canonical digest of the simulator and node state, not just the trace. It
+        covers liveness, epochs, RNG state, timers, partitions, disk contents, the
+        pending queue, and statistics. It detects state divergence even if the
+        visible trace happens to look identical.
+      </p>
+    </div>
+  </div>
+  <p>
+    The default trace level records behavior, not every RNG value. That keeps the
+    golden file readable. <code>-decisions</code> adds each draw, which is useful
+    when investigating why two plausible executions diverged.
+  </p>
+
+  <h3>Replay in practice</h3>
+  <p>
+    A failure report is self-contained enough to hand to another engineer:
+  </p>
+  <pre><code>simulation failed: seed=77 scenario=invariant-test version=1 step=1 tick=0 \
+  event=seq=1 kind=scenario desc=one
+invariant=always-fails
+cause: boom
+replay: go run ./cmd/simctl -seed 77 -scenario invariant-test -ticks 0 -trace</code></pre>
+  <p>
+    The CLI validates a negative seed before conversion, so there is one canonical
+    decimal representation per seed. A replay command always includes the scenario
+    and tick limit. The same seed on the same version and binary must reproduce the
+    same failure at the same step and tick.
+  </p>
+
+  <div class="callout warn">
+    <strong>Known boundary.</strong> Determinism does not survive an intentional
+    semantic change or a different binary. If a change alters draw order or event
+    order, bump <code>Version</code>, update the golden trace, and document it. The
+    report, README, and trace header all carry the version for this reason.
+  </div>
+</section>
+
+<!-- ============================ 06 OBSERVABILITY ============================ -->
+<section class="section">
+  <span class="badge">06 &nbsp; Observability</span>
+  <h2>Traces, invariants, and failure artifacts</h2>
+
+  <p class="lead">
+    A deterministic failure is only useful if it can be inspected. Stage 1 makes the
+    execution legible at three levels: a canonical event trace, per-run statistics,
+    and a structured failure object that includes the last events before the
+    violation.
+  </p>
+
+  <h3>What a trace records</h3>
+  <table>
+    <thead><tr><th style="width:24%">Record</th><th>Example fields</th><th>Why it matters</th></tr></thead>
+    <tbody>
+      <tr><td>Header</td><td><code>sim v=1 seed=42 scenario=ping level=0</code></td><td>Ties the artifact to the exact semantics and input.</td></tr>
+      <tr><td>Event</td><td><code>event seq=12 kind=timer desc=node=3 …</code></td><td>Shows the dispatch boundary and the scheduling order.</td></tr>
+      <tr><td>Network</td><td><code>send</code>, <code>recv</code>, <code>drop reason=…</code></td><td>Explains every delivered and lost message.</td></tr>
+      <tr><td>Disk</td><td><code>io node=1 op=7 kind=sync tag=…</code></td><td>Shows completion order and durable progress.</td></tr>
+      <tr><td>Lifecycle</td><td><code>boot</code>, <code>crash</code>, <code>restart … epoch=…</code></td><td>Explains why memory was discarded and why stale work was ignored.</td></tr>
+      <tr><td>Network control</td><td><code>partition</code>, <code>heal-all</code>, <code>net latency</code>, <code>net drop-permille</code></td><td>Records chaos actions as first-class events.</td></tr>
+      <tr><td>RNG decisions</td><td><code>rng range=… min=… max=…</code></td><td>Optional level for diagnosing draw-order divergence.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Statistics</h3>
+  <p>
+    Every simulation maintains counters for events, messages sent/delivered/dropped,
+    disk operations, boots, crashes, and restarts. The CLI prints them after the run.
+    They are useful for quickly spotting an overly destructive chaos schedule, but
+    they are not a correctness signal; invariants are.
+  </p>
+  <pre><code>run v=1 seed=42 scenario=ping nodes=5 end-tick=500 status=ok
+steps=504 events=504 sent=176 delivered=80 dropped=96 disk-ops=277 \
+  boots=7 crashes=2 restarts=2
+trace-hash=25895005889e1714 state-hash=c38a6906689885f9</code></pre>
+
+  <h3>Failure report shape</h3>
+  <p>
+    When an invariant fails, a panic escapes a callback, a trace write fails, or a
+    guard trips, the simulator freezes and returns a <code>*Failure</code>. The
+    report is deterministic; it contains no wall-clock timestamp and no pointer
+    addresses.
+  </p>
+  <div class="sig">
+    <p><strong>seed</strong> · scenario · version · step · tick</p>
+    <p><strong>event</strong> — sequence, kind, description of the triggering event</p>
+    <p><strong>invariant</strong> — name, or empty for a dispatch/panic failure</p>
+    <p><strong>cause</strong> — the underlying error or panic with stack trace</p>
+    <p><strong>replay</strong> — exact <code>go run ./cmd/simctl …</code> command</p>
+    <p><strong>last trace</strong> — the 40 most recent records</p>
+  </div>
+
+  <h3>Invariant discipline</h3>
+  <ul>
+    <li>Checks run in registration order and must be pure with respect to simulation state.</li>
+    <li>Checks may keep their own history, but must not draw randomness or schedule work.</li>
+    <li>A panic inside a check becomes a normal failure with the invariant name.</li>
+    <li>Structural checks are always on, even when a scenario registers no invariants.</li>
+    <li>Every run performs one final check after the last event, so an empty tail is still checked.</li>
+  </ul>
+
+  <div class="callout">
+    <strong>Design consequence.</strong> The invariant hook is the place where Raft
+    and KV correctness will live. Stage 1 proves the hook is called at the right
+    times, can be stateful, and produces an actionable replay artifact.
+  </div>
+</section>
+
+<!-- ============================ 07 WORKLOAD ============================ -->
+<section class="section">
+  <span class="badge">07 &nbsp; Workload</span>
+  <h2>Stage 1 workload and CLI</h2>
+
+  <p class="lead">
+    The <code>ping</code> scenario is intentionally not a Raft placeholder. It is a
+    small but complete journaling workload that exercises every Stage 1 subsystem:
+    timers, randomness, messaging, partitions, asynchronous disk I/O, sync
+    durability, crashes, fresh restarts, recovery, and a stateful invariant.
+  </p>
+
+  <h3>PingNode behavior</h3>
+  <div class="flow">
+    <div class="flow-step"><b>Boot</b>Issue a journal read and schedule the first ping after 10–20 ticks.</div>
+    <div class="flow-step"><b>Ping</b>Pick a peer, increment the sequence, send 8-byte big-endian payload, journal and sync.</div>
+    <div class="flow-step"><b>Reply</b>On <code>ping</code>, count receipt and send a cloned <code>pong</code> to the sender.</div>
+    <div class="flow-step"><b>Observe</b>On <code>pong</code>, increment the inbound-pong counter.</div>
+    <div class="flow-step"><b>Recover</b>On the journal read, count newline-terminated records and mark recovery complete.</div>
+  </div>
+
+  <p>
+    Each outgoing ping writes one line, <code>p &lt;node&gt; &lt;seq&gt;\n</code>, then
+    issues a <code>Sync</code>. The node increments its durable-record count only
+    when the sync completion arrives. This deliberately models the Raft rule that a
+    node must not treat data as durable until the persistence acknowledgement is
+    delivered. The journal is append-only in Stage 1; a future WAL will add
+    truncation, checksums, and torn-write tests.
+  </p>
+
+  <div class="timeline">
+    <span class="t">t=0</span> &nbsp;<span class="e">boot</span> node=4 &nbsp;→&nbsp; <span class="m">disk.read</span> journal<br>
+    <span class="t">t=11</span> &nbsp;<span class="e">timer</span> node=4 &nbsp;→&nbsp; peer=2 &nbsp;→&nbsp; <span class="m">send ping</span> bytes=8<br>
+    <span class="t">t=11</span> &nbsp;<span class="m">disk.append</span> + <span class="m">disk.sync</span> journal<br>
+    <span class="t">t=11</span> &nbsp;<span class="d">drop</span> ping reason=partition<br>
+    <span class="t">t=13</span> &nbsp;<span class="ok">disk sync complete</span> → durable++<br>
+    <span class="t">t=24</span> &nbsp;<span class="e">timer</span> node=4 &nbsp;→&nbsp; next ping
+  </div>
+
+  <p>
+    On restart, a fresh <code>PingNode</code> is constructed. Its in-memory counters
+    start at zero, its incarnation increments, and it reads the journal left by all
+    prior incarnations. The recovery invariant compares the recovered line count
+    with the cumulative sync completions the simulator actually observed. A node
+    must never come back with more records than could possibly have been synced.
+  </p>
+
+  <h3>Chaos driver</h3>
+  <p>
+    Chaos actions are scheduled simulator events, not a separate goroutine. The
+    first action fires at tick 0 and then recurs after 50–150 ticks, consuming the
+    same RNG stream as node and network behavior. This is important: changing the
+    chaos schedule changes the execution exactly as visibly as changing a node's
+    timer.
+  </p>
+  <table>
+    <thead><tr><th style="width:22%">Action</th><th style="width:14%">Weight</th><th>Effect</th></tr></thead>
+    <tbody>
+      <tr><td>Crash a live node</td><td>25%</td><td>Epoch++, discard memory, cancel timers and I/O, revert visible disk.</td></tr>
+      <tr><td>Restart a down node</td><td>20%</td><td>Call the factory for a fresh incarnation; recover durable journal.</td></tr>
+      <tr><td>Partition the cluster</td><td>20%</td><td>Choose a cut point and block all cross-group directed links.</td></tr>
+      <tr><td>Heal all links</td><td>10%</td><td>Clear the blocked-link set.</td></tr>
+      <tr><td>Change drop rate</td><td>15%</td><td>Choose a new uniform per-mille loss rate in 0–300.</td></tr>
+      <tr><td>Change latency</td><td>10%</td><td>Choose a new inclusive range from 1–3 up to 1–7 ticks.</td></tr>
+      <tr><td>Finalize at <code>end</code></td><td>once</td><td>Heal, zero loss, set latency 1–2, and restart every down node.</td></tr>
+    </tbody>
+  </table>
+  <p>
+    The finalizer does not require liveness at every intermediate point. It makes
+    the end-of-run summary meaningful and ensures a restarted node has a chance to
+    finish recovery before the run stops.
+  </p>
+
+  <h3>Command line</h3>
+  <p>
+    <code>simctl</code> is a thin deterministic runner. It validates inputs, builds
+    the scenario, runs until the requested tick, optionally streams the trace to
+    stdout, and prints the canonical summary. It never uses simulation time for its
+    own behavior.
+  </p>
+  <table>
+    <thead><tr><th style="width:20%">Flag</th><th style="width:18%">Default</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>-seed</code></td><td><code>1</code></td><td>Non-negative seed; one canonical decimal value per stream.</td></tr>
+      <tr><td><code>-scenario</code></td><td><code>ping</code></td><td>Stage 1 has exactly one scenario.</td></tr>
+      <tr><td><code>-ticks</code></td><td><code>1000</code></td><td>Run until this simulated tick; must be non-negative.</td></tr>
+      <tr><td><code>-trace</code></td><td><code>false</code></td><td>Stream the canonical event trace to stdout before the summary.</td></tr>
+      <tr><td><code>-decisions</code></td><td><code>false</code></td><td>Include RNG draw records; implies a more detailed trace.</td></tr>
+    </tbody>
+  </table>
+
+  <pre><code>$ go run ./cmd/simctl -seed 42 -scenario ping -ticks 500
+
+run v=1 seed=42 scenario=ping nodes=5 end-tick=500 status=ok
+steps=504 events=504 sent=176 delivered=80 dropped=96 disk-ops=277 \
+  boots=7 crashes=2 restarts=2
+trace-hash=25895005889e1714 state-hash=c38a6906689885f9</code></pre>
+
+  <h3>Golden run</h3>
+  <p>
+    The checked-in golden trace is the first 120 ticks of seed 42 with trace events
+    enabled. It is 363 lines and ends after the timer event at tick 120; the CLI
+    summary is separate. The golden test compares the full byte stream, while
+    <code>TestSameSeedProducesIdenticalTrace</code> compares the longer 500-tick
+    trace along with both hashes. The trace is small enough to review by hand when
+    the simulation semantics intentionally change.
+  </p>
+  <div class="grid3">
+    <div class="kpi"><div class="n">5</div><div class="l">Nodes</div></div>
+    <div class="kpi"><div class="n">363</div><div class="l">Golden trace lines</div></div>
+    <div class="kpi"><div class="n">144</div><div class="l">Steps at tick 120</div></div>
+  </div>
+</section>
+
+<!-- ============================ 08 CODE MAP ============================ -->
+<section class="section">
+  <span class="badge">08 &nbsp; Implementation</span>
+  <h2>Code map</h2>
+
+  <p class="lead">
+    Stage 1 is 3,120 lines of Go including tests: 1,868 in production files and
+    1,252 in tests. The production surface is deliberately compact, with one
+    responsibility per file and no hidden runtime.
+  </p>
+
+  <div class="arch">
+    <svg viewBox="0 0 1000 250" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Package dependency graph">
+      <defs>
+        <marker id="arrow3" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+          <path d="M0,0 L0,6 L9,3 z" fill="#64748b"/>
+        </marker>
+      </defs>
+      <rect x="35" y="78" width="210" height="80" rx="8" fill="#0f172a"/>
+      <text x="140" y="108" text-anchor="middle" fill="#ffffff" font-size="14" font-weight="700" font-family="SFMono-Regular, Menlo, monospace">cmd/simctl</text>
+      <text x="140" y="128" text-anchor="middle" fill="#94a3b8" font-size="9" font-family="-apple-system, Segoe UI, sans-serif">process entry point</text>
+      <text x="140" y="143" text-anchor="middle" fill="#94a3b8" font-size="9" font-family="-apple-system, Segoe UI, sans-serif">flags · run · summary</text>
+
+      <line x1="245" y1="118" x2="350" y2="118" stroke="#64748b" stroke-width="1.4" marker-end="url(#arrow3)"/>
+
+      <rect x="352" y="78" width="240" height="80" rx="8" fill="#f0fdfa" stroke="#99f6e4"/>
+      <text x="472" y="108" text-anchor="middle" fill="#115e59" font-size="14" font-weight="700" font-family="SFMono-Regular, Menlo, monospace">internal/scenarios</text>
+      <text x="472" y="128" text-anchor="middle" fill="#334155" font-size="9" font-family="-apple-system, Segoe UI, sans-serif">ping workload · chaos</text>
+      <text x="472" y="143" text-anchor="middle" fill="#334155" font-size="9" font-family="-apple-system, Segoe UI, sans-serif">recovery invariant</text>
+
+      <line x1="592" y1="118" x2="697" y2="118" stroke="#64748b" stroke-width="1.4" marker-end="url(#arrow3)"/>
+
+      <rect x="699" y="62" width="266" height="112" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+      <text x="832" y="90" text-anchor="middle" fill="#0f172a" font-size="14" font-weight="700" font-family="SFMono-Regular, Menlo, monospace">internal/sim</text>
+      <text x="832" y="110" text-anchor="middle" fill="#64748b" font-size="9" font-family="-apple-system, Segoe UI, sans-serif">clock · event queue · RNG · network · disk</text>
+      <text x="832" y="126" text-anchor="middle" fill="#64748b" font-size="9" font-family="-apple-system, Segoe UI, sans-serif">lifecycle · trace · hash · invariants · failure</text>
+      <text x="832" y="150" text-anchor="middle" fill="#0f766e" font-size="9.5" font-weight="700" font-family="SFMono-Regular, Menlo, monospace">standard library only</text>
+
+      <text x="140" y="208" text-anchor="middle" fill="#64748b" font-size="9" font-family="-apple-system, Segoe UI, sans-serif">depends on ↓</text>
+      <text x="472" y="208" text-anchor="middle" fill="#64748b" font-size="9" font-family="-apple-system, Segoe UI, sans-serif">depends on →</text>
+      <text x="832" y="208" text-anchor="middle" fill="#64748b" font-size="9" font-family="-apple-system, Segoe UI, sans-serif">no project-internal imports</text>
+
+      <rect x="374" y="28" width="196" height="26" rx="13" fill="#fef3c7"/>
+      <text x="472" y="45" text-anchor="middle" fill="#92400e" font-size="8.5" font-weight="700" font-family="-apple-system, Segoe UI, sans-serif">future Raft/storage/KV import sim</text>
+    </svg>
+  </div>
+
+  <h3>Production files</h3>
+  <table class="table-break">
+    <thead><tr><th style="width:34%">File</th><th class="num" style="width:9%">Lines</th><th>Role</th></tr></thead>
+    <tbody>
+      <tr><td><code>cmd/simctl/main.go</code></td><td class="num">70</td><td>Flags, validation, scenario setup, trace output, summary metrics.</td></tr>
+      <tr><td><code>internal/scenarios/ping.go</code></td><td class="num">302</td><td>Ping node, journal recovery, bad-record ledger, chaos driver, finalizer.</td></tr>
+      <tr><td><code>internal/sim/sim.go</code></td><td class="num">521</td><td>Config, Sim state, node registry, boot/crash/restart, controls, RNG wrappers.</td></tr>
+      <tr><td><code>internal/sim/run.go</code></td><td class="num">173</td><td>Run APIs, dispatch, panic boundary, invariant checks, failure creation.</td></tr>
+      <tr><td><code>internal/sim/event.go</code></td><td class="num">59</td><td>Event type and stable min-heap ordered by <code>(at, seq)</code>.</td></tr>
+      <tr><td><code>internal/sim/rand.go</code></td><td class="num">72</td><td>Frozen SplitMix64, unbiased ranges, decision labels, version constant.</td></tr>
+      <tr><td><code>internal/sim/env.go</code></td><td class="num">122</td><td>Per-node capability surface and epoch-bound network/disk calls.</td></tr>
+      <tr><td><code>internal/sim/network.go</code></td><td class="num">95</td><td>Async delivery, latency, drops, partitions, epoch checks, payload clones.</td></tr>
+      <tr><td><code>internal/sim/disk.go</code></td><td class="num">170</td><td>Per-node FIFO device, visible/durable files, sync, crash reversion, list.</td></tr>
+      <tr><td><code>internal/sim/trace.go</code></td><td class="num">80</td><td>Canonical line format, rolling trace hash, bounded tail buffer.</td></tr>
+      <tr><td><code>internal/sim/hash.go</code></td><td class="num">128</td><td>Canonical state hash over nodes, timers, partitions, disk, queue, stats.</td></tr>
+      <tr><td><code>internal/sim/invariant.go</code></td><td class="num">33</td><td>Invariant interface, function adapter, snapshotter contract.</td></tr>
+      <tr><td><code>internal/sim/failure.go</code></td><td class="num">43</td><td>Structured replayable failure and deterministic error rendering.</td></tr>
+      <tr><td colspan="3" style="background:#eef2f7"><strong>Production total</strong></td></tr>
+      <tr><td colspan="2" style="text-align:right"><strong>1,868</strong></td><td>Across 13 files</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Test files</h3>
+  <table>
+    <thead><tr><th style="width:40%">File</th><th class="num" style="width:10%">Lines</th><th>Coverage focus</th></tr></thead>
+    <tbody>
+      <tr><td><code>cmd/simctl/main_test.go</code></td><td class="num">56</td><td>Cross-process replay and CLI validation.</td></tr>
+      <tr><td><code>internal/scenarios/ping_test.go</code></td><td class="num">196</td><td>Determinism, golden trace, interleaving, multi-restart recovery, 100 seeds.</td></tr>
+      <tr><td><code>internal/sim/sim_test.go</code></td><td class="num">343</td><td>Clock, ordering, timers, invariants, panics, lifecycle, max-step guard.</td></tr>
+      <tr><td><code>internal/sim/disk_test.go</code></td><td class="num">295</td><td>Read-your-writes, crash durability, FIFO, sync coverage, replace, list.</td></tr>
+      <tr><td><code>internal/sim/network_test.go</code></td><td class="num">172</td><td>Latency, loss, partitions, in-flight drops, payload isolation, epochs.</td></tr>
+      <tr><td><code>internal/sim/rand_test.go</code></td><td class="num">60</td><td>Golden vectors, replay, range bounds, seed separation.</td></tr>
+      <tr><td><code>internal/sim/static_test.go</code></td><td class="num">130</td><td>AST scan for forbidden APIs and concurrency primitives.</td></tr>
+      <tr><td colspan="3" style="background:#eef2f7"><strong>Test total: 1,252 lines · 41 tests · 7 test files</strong></td></tr>
+    </tbody>
+  </table>
+
+  <h3>Public surface</h3>
+  <div class="grid2">
+    <div class="sig">
+      <p><strong>Simulation</strong></p>
+      <p><code>New(Config) (*Sim, error)</code></p>
+      <p><code>AddNode(id, NodeFactory) error</code></p>
+      <p><code>Start() error</code></p>
+      <p><code>RunUntil(Tick) error</code></p>
+      <p><code>RunSteps(uint64) error</code></p>
+      <p><code>RunUntilIdle() error</code></p>
+      <p><code>RegisterInvariant(Invariant)</code></p>
+    </div>
+    <div class="sig">
+      <p><strong>Controls and artifacts</strong></p>
+      <p><code>Crash(id) / Restart(id) error</code></p>
+      <p><code>Block / Unblock / Partition / Isolate / HealAll</code></p>
+      <p><code>SetDropPermille / SetLatency</code></p>
+      <p><code>TraceHash() uint64</code></p>
+      <p><code>StateHash() uint64</code></p>
+      <p><code>TraceTail(n int) []string</code></p>
+      <p><code>Stats() Stats · Failed() error</code></p>
+    </div>
+  </div>
+  <p>
+    Node code sees only <code>Env</code>: identity, simulated time, send, timer,
+    randomness, and disk methods. It cannot obtain the <code>*Sim</code>, inspect
+    another node, access the host clock, or open a real file.
+  </p>
+
+  <h3>Repository history</h3>
+  <table>
+    <thead><tr><th>Commit</th><th>Contents</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td><code>1499702</code></td><td>Scaffold, README, stage plan, Makefile, empty package layout.</td><td>Pushed</td></tr>
+      <tr><td><code>0c7d5fb</code></td><td>Stage 1 simulator, ping scenario, CLI, golden trace, 41 tests.</td><td>Pushed to <code>origin/main</code></td></tr>
+    </tbody>
+  </table>
+  <p class="small muted">
+    Repository: <span class="mono">vaibhavraj082007/Raft-Based-Distributed-Database-Management-System</span>.
+    Toolchain at verification time: Go 1.27.4 on darwin/arm64; module target Go 1.24.
+  </p>
+</section>
+
+<!-- ============================ 09 TESTS ============================ -->
+<section class="section">
+  <span class="badge">09 &nbsp; Evidence</span>
+  <h2>Test evidence</h2>
+
+  <p class="lead">
+    Stage 1 closes only when the tests prove the determinism claim and the crash
+    semantics, not merely when the code compiles. All 41 tests pass, including under
+    the race detector and with shuffled execution order.
+  </p>
+
+  <table>
+    <thead><tr><th style="width:38%">Verification</th><th style="width:16%">Result</th><th>Evidence</th></tr></thead>
+    <tbody>
+      <tr><td><code>go test ./...</code></td><td><strong>pass</strong></td><td>41 tests across 3 packages.</td></tr>
+      <tr><td><code>go test -race ./...</code></td><td><strong>pass</strong></td><td>No data races; the design has no shared concurrent state.</td></tr>
+      <tr><td><code>go vet ./...</code></td><td><strong>pass</strong></td><td>No diagnostics.</td></tr>
+      <tr><td><code>go test ./... -shuffle=on</code></td><td><strong>pass</strong></td><td>Tests do not depend on package or test execution order.</td></tr>
+      <tr><td><code>-count=5</code> determinism</td><td><strong>pass</strong></td><td>Five repeats of the same-seed evidence test.</td></tr>
+      <tr><td>Cross-process CLI replay</td><td><strong>pass</strong></td><td>Two separate binaries produce byte-identical output.</td></tr>
+      <tr><td>Golden trace</td><td><strong>pass</strong></td><td>Seed 42, 120 ticks, 363 lines, byte-exact.</td></tr>
+      <tr><td>100-seed smoke</td><td><strong>pass</strong></td><td>100 seeds, 300 ticks, invariants intact, ~0.06 s observed.</td></tr>
+      <tr><td>Static API guard</td><td><strong>pass</strong></td><td>AST scan of all simulated packages.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Package-level results</h3>
+  <table>
+    <thead><tr><th>Package</th><th class="num">Tests</th><th>Command result</th></tr></thead>
+    <tbody>
+      <tr><td><code>raftkv/cmd/simctl</code></td><td class="num">1</td><td><code>ok</code></td></tr>
+      <tr><td><code>raftkv/internal/scenarios</code></td><td class="num">6</td><td><code>ok</code></td></tr>
+      <tr><td><code>raftkv/internal/sim</code></td><td class="num">34</td><td><code>ok</code></td></tr>
+      <tr><td><strong>Total</strong></td><td class="num"><strong>41</strong></td><td><strong>all packages pass</strong></td></tr>
+    </tbody>
+  </table>
+
+  <h3>Key evidence in detail</h3>
+  <div class="grid2">
+    <div class="card">
+      <h4>Byte-identical replay</h4>
+      <p>
+        Three fresh simulators with seed 42 produce the same trace bytes, trace hash,
+        and state hash. Two independent simulators advanced alternately with
+        <code>RunSteps(1)</code> produce exactly the same trace as either one run
+        alone. A built CLI invoked twice in separate processes produces identical
+        bytes.
+      </p>
+    </div>
+    <div class="card">
+      <h4>Crash and durability</h4>
+      <p>
+        Unsynced appends are visible to reads, then disappear after a crash. Synced
+        bytes survive. Pending operations never deliver a completion across the
+        crash. A sync persists all preceding appends. The restarted node is a new
+        object, and stale timers, messages, and I/O completions are filtered.
+      </p>
+    </div>
+    <div class="card">
+      <h4>Chaos and invariants</h4>
+      <p>
+        The 100-seed smoke test runs five nodes with random crashes, restarts,
+        partitions, loss changes, and latency changes for 300 ticks. The recovery
+        invariant holds for every seed, including the multi-restart scenario that
+        exposed S1-001.
+      </p>
+    </div>
+    <div class="card">
+      <h4>Static guard and vet</h4>
+      <p>
+        The AST guard rejects <code>go</code>, <code>select</code>, channels,
+        channel operations, <code>time.Now/Sleep/After/Tick</code> and timer
+        constructors, <code>math/rand</code>, <code>crypto/rand</code>,
+        <code>net</code>, and filesystem/system access in simulated code. Vet and
+        race detection add the compiler's own checks.
+      </p>
+    </div>
+  </div>
+
+  <h3>Performance envelope</h3>
+  <p>
+    The 100-seed smoke run completes in roughly 0.06 seconds on the verification
+    machine, far below the 10-second Stage 1 budget. This is not a throughput
+    benchmark; the number exists to catch accidental super-linear behavior in
+    scenario setup or invariant checks. The simulator deliberately avoids
+    optimization that would complicate determinism.
+  </p>
+
+  <h3>What is not proven by Stage 1</h3>
+  <p>
+    The suite proves the simulator's own behavior and the ping workload's recovery
+    accounting. It does not prove Raft safety, log matching, linearizability, or
+    durable production storage, because those objects do not exist yet. Stage 2
+    will add its own tests and invariants rather than extending these results by
+    assumption.
+  </p>
+
+  <div class="callout">
+    <strong>Result:</strong> Stage 1 acceptance is met. The full test inventory is in
+    Appendix D; implementation and test line counts are in Section 08.
+  </div>
+</section>
+
+<!-- ============================ 10 BUG LOG ============================ -->
+<section class="section">
+  <span class="badge">10 &nbsp; Bug log</span>
+  <h2>Bug found and fixed — S1-001</h2>
+
+  <p class="lead">
+    One real bug was found during Stage 1 verification. It was a flaw in the test
+    invariant's accounting, not in the simulator's disk model: the invariant
+    compared a cumulative recovery count against a per-incarnation maximum, so it
+    would falsely fail after the second restart.
+  </p>
+
+  <table>
+    <thead><tr><th style="width:22%">Field</th><th>Detail</th></tr></thead>
+    <tbody>
+      <tr><td><strong>ID</strong></td><td>S1-001</td></tr>
+      <tr><td><strong>Stage / scenario</strong></td><td>Stage 1, forced-restart ping invariant test (seed 5)</td></tr>
+      <tr><td><strong>Symptom</strong></td><td>After two or more restarts, the recovery invariant claimed a node had recovered more records than it had ever synced, even though the journal was legitimate.</td></tr>
+      <tr><td><strong>Root cause</strong></td><td>The checker remembered the maximum durable count seen in any single incarnation. Recovery is cumulative across incarnations, so the second restart could recover more than the per-incarnation maximum while still being fully valid.</td></tr>
+      <tr><td><strong>Fix</strong></td><td>Track cumulative sync completions across all incarnations, keyed by an incarnation counter; compare recovery against that cumulative sum.</td></tr>
+      <tr><td><strong>Regression test</strong></td><td><code>TestPingInvariantAcrossMultipleRestarts</code> — three forced crash/restart cycles, 500 ticks, asserts incarnation 4 and non-zero recovery.</td></tr>
+      <tr><td><strong>Status</strong></td><td><span class="tag ok">fixed and covered</span></td></tr>
+    </tbody>
+  </table>
+
+  <h3>Why the bug mattered</h3>
+  <p>
+    The simulator was behaving correctly: durable bytes survived, the new
+    incarnation recovered them, and the journal grew across restarts. The invariant
+    was under-counting legitimate durability. Left in place, it would have produced
+    false failures and eroded trust in the test suite once later stages added more
+    restarts. The fix keeps the invariant strict but makes its ledger match the
+    journal's actual lifetime.
+  </p>
+
+  <div class="grid2">
+    <div class="card">
+      <h4>Before</h4>
+      <p class="small">
+        <code>maxDurable[node]</code> = the largest durable count observed in one
+        incarnation. On restart, recovery was compared with that maximum.
+      </p>
+      <p class="small muted">Incarnation 1 syncs 10; incarnation 2 syncs 8; restart recovers 18. 18 &gt; 10, so the checker falsely fails.</p>
+    </div>
+    <div class="card">
+      <h4>After</h4>
+      <p class="small">
+        <code>cumulativeSynced[node]</code> = sum of every sync completion observed
+        across incarnations. On restart, recovery is compared with the cumulative
+        sum.
+      </p>
+      <p class="small muted">Incarnation 1 syncs 10; incarnation 2 syncs 8; restart recovers 18. 18 ≤ 18, so the checker passes.</p>
+    </div>
+  </div>
+
+  <h3>Reproduction and location</h3>
+  <pre><code>go test ./internal/scenarios -run TestPingInvariantAcrossMultipleRestarts -v
+
+# The test schedules crash/restart at ticks 50/51, 150/151, and 250/251,
+# then runs to tick 500. Node 1 ends at incarnation 4.</code></pre>
+  <p>
+    The bug and its regression test are recorded in the README bug log as required
+    by the project process. No other bugs are logged for Stage 1.
+  </p>
+</section>
+
+<!-- ============================ 11 LIMITS ============================ -->
+<section class="section">
+  <span class="badge">11 &nbsp; Boundary</span>
+  <h2>Limitations and next stage</h2>
+
+  <p class="lead">
+    Stage 1 is complete, but it is deliberately incomplete as a database. The
+    boundary is explicit: there is a tested deterministic substrate and a toy
+    workload, and nothing that claims Raft safety or production storage.
+  </p>
+
+  <h3>Limitations of this stage</h3>
+  <table class="table-break">
+    <thead><tr><th style="width:32%">Area</th><th>Stage 1 boundary</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Raft</strong></td><td>No terms, elections, votes, AppendEntries, commit rule, snapshots, or membership changes.</td></tr>
+      <tr><td><strong>Storage engine</strong></td><td>The disk is a fake raw device. There is no WAL, LSM-tree, checksum, truncation, compaction, or recovery format.</td></tr>
+      <tr><td><strong>Key-value layer</strong></td><td>No commands, client IDs, deduplication, linearizability checker, or state machine.</td></tr>
+      <tr><td><strong>Distributed invariants</strong></td><td>The framework is ready, but leader uniqueness, committed-log agreement, commit durability, and bank totals arrive with the layers they inspect.</td></tr>
+      <tr><td><strong>Network realism</strong></td><td>Latency and drops are modeled; duplication, corruption, and explicit reordering knobs are not.</td></tr>
+      <tr><td><strong>Disk realism</strong></td><td>No torn writes, bit rot, fsync failure, or partial crash; completed writes are atomic.</td></tr>
+      <tr><td><strong>Lifecycle realism</strong></td><td>Restart is immediate; there is no boot delay, crash recovery period, or process-level resource failure.</td></tr>
+      <tr><td><strong>Workload</strong></td><td>One toy scenario, one RNG stream, and a 100-seed smoke sweep — not an exhaustive state-space proof.</td></tr>
+      <tr><td><strong>Performance</strong></td><td>No throughput, latency, or memory benchmarking. Determinism and clarity take priority.</td></tr>
+      <tr><td><strong>Static guard</strong></td><td>The AST scan is a strong tripwire, not a formal proof; reflection or indirect calls could evade it.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>What Stage 2 must add</h3>
+  <ol class="step-list">
+    <li><strong>Raft actor state</strong> — current term, voted-for, role, commit index, and a log with term/index entries.</li>
+    <li><strong>Persistence before reply</strong> — term, vote, and log writes must complete their sync before an RPC that depends on them is answered. The Stage 1 disk already supports this shape.</li>
+    <li><strong>Election and heartbeats</strong> — randomized election timeouts through the simulator RNG, request-vote handling, and leader heartbeats as timer events.</li>
+    <li><strong>Replication</strong> — AppendEntries, next/match indices, conflict truncation, and commit advancement under the Figure 2 rules.</li>
+    <li><strong>Raft invariants</strong> — one leader per term, no committed-log disagreement, and committed entries never disappear. These become per-step checks.</li>
+    <li><strong>Tests</strong> — partition, crash, restart, delayed delivery, lost messages, stale terms, and replay of every discovered seed. No later layer advances without them.</li>
+  </ol>
+
+  <div class="callout warn">
+    <strong>Stop point.</strong> Stage 2 has not started. No Raft, storage, KV,
+    sharding, SQL, or dashboard code exists in the repository. Beginning the next
+    stage requires explicit approval.
+  </div>
+
+  <div class="end-note">
+    Report prepared from commit <span class="mono">0c7d5fb</span> on 24 November 2026.
+    Revision <span class="mono">main</span> matched <span class="mono">origin/main</span>
+    at the time of writing. This document describes Stage 1 only.
+  </div>
+</section>
+
+<!-- ============================ APPENDIX A ============================ -->
+<section class="section">
+  <span class="badge">Appendix A</span>
+  <h2>Canonical trace excerpt</h2>
+
+  <p class="lead">
+    This is a verbatim excerpt from the checked-in seed-42 golden run at 120 ticks.
+    The trace is plain text by design; the same bytes feed the hash and the golden
+    comparison.
+  </p>
+
+  <pre><code>sim v=1 seed=42 scenario=ping level=0
+t=0 step=0 nodes=1,2,3,4,5
+t=0 step=1 event seq=1 kind=boot desc=node=1
+t=0 step=1 boot node=1 epoch=0
+t=0 step=2 event seq=2 kind=boot desc=node=2
+t=0 step=2 boot node=2 epoch=0
+t=0 step=3 event seq=3 kind=boot desc=node=3
+t=0 step=3 boot node=3 epoch=0
+t=0 step=4 event seq=4 kind=boot desc=node=4
+t=0 step=4 boot node=4 epoch=0
+t=0 step=5 event seq=5 kind=boot desc=node=5
+t=0 step=5 boot node=5 epoch=0
+t=0 step=6 event seq=6 kind=scenario desc=chaos
+t=0 step=6 partition groups=1,2|3,4,5
+t=1 step=7 event seq=8 kind=disk desc=node=1 op=1 kind=read
+t=1 step=7 io node=1 op=1 kind=read tag=1 bytes=0
+t=1 step=8 event seq=10 kind=disk desc=node=2 op=1 kind=read
+t=1 step=8 io node=2 op=1 kind=read tag=1 bytes=0
+t=1 step=9 event seq=12 kind=disk desc=node=3 op=1 kind=read
+t=1 step=9 io node=3 op=1 kind=read tag=1 bytes=0
+...
+t=11 step=12 event seq=15 kind=timer desc=node=4 id=4 tag=1
+t=11 step=12 timer node=4 id=4 tag=1
+t=11 step=12 send from=4 to=2 kind=ping bytes=8
+t=11 step=12 drop from=4 to=2 kind=ping reason=partition
+...
+t=115 step=142 recv from=4 to=5 kind=pong bytes=8
+t=120 step=143 event seq=7 kind=scenario desc=finalize
+t=120 step=143 heal-all
+t=120 step=143 net drop-permille=0
+t=120 step=143 net latency min=1 max=2
+t=120 step=144 event seq=139 kind=timer desc=node=1 id=38 tag=1
+t=120 step=144 timer node=1 id=38 tag=1
+t=120 step=144 send from=1 to=4 kind=ping bytes=8</code></pre>
+
+  <p class="small muted">
+    The golden file is <code>testdata/stage1/ping-seed-42.trace</code>. It is 363
+    lines and ends at the tick-120 send shown above. The CLI summary is not part of
+    the golden trace buffer; it is printed separately after the run.
+  </p>
+</section>
+
+<!-- ============================ APPENDIX B ============================ -->
+<section class="section">
+  <span class="badge">Appendix B</span>
+  <h2>API reference</h2>
+
+  <p class="lead">
+    The signatures below are the actual Stage 1 surface. Node-facing code is kept
+    intentionally narrow: <code>Env</code> is the boundary, not a convenience
+    wrapper around the simulator.
+  </p>
+
+  <h3>Core types</h3>
+  <div class="sig">
+    <p><code>type Tick int64</code> — simulated milliseconds.</p>
+    <p><code>type NodeID uint16</code> — non-zero node identity.</p>
+    <p><code>type TimerID uint64</code> — simulator-issued timer handle.</p>
+    <p><code>type Message struct { From, To NodeID; Kind string; Payload []byte }</code></p>
+    <p><code>type TimerEvent struct { ID TimerID; Tag uint64 }</code></p>
+    <p><code>type IOEvent struct { Tag uint64; Op string; Data []byte; Err error }</code></p>
+  </div>
+
+  <h3>Actors and capabilities</h3>
+  <div class="sig">
+    <p><code>type Node interface { Start(); HandleMessage(Message); HandleTimer(TimerEvent); HandleIO(IOEvent) }</code></p>
+    <p><code>type NodeFactory func(Env) Node</code></p>
+    <p><code>type Env interface</code> — <code>ID</code>, <code>Now</code>, <code>Send</code>, <code>After</code>, <code>CancelTimer</code>, <code>Uint64</code>, <code>Intn</code>, <code>IntRange</code>, <code>Int64Range</code>, <code>Chance</code>, <code>Read</code>, <code>Append</code>, <code>Replace</code>, <code>Sync</code>, <code>List</code>.</p>
+  </div>
+
+  <h3>Configuration</h3>
+  <div class="sig">
+    <p><code>Config{ Seed uint64; Scenario string; Network NetworkConfig; Disk DiskConfig; MaxSteps uint64; MaxTick Tick; Trace io.Writer; TraceLevel TraceLevel }</code></p>
+    <p><code>NetworkConfig{ MinLatency, MaxLatency Tick; DropPermille int }</code></p>
+    <p><code>DiskConfig{ Latency Tick }</code></p>
+    <p><code>TraceEvents</code> · <code>TraceDecisions</code></p>
+  </div>
+
+  <h3>Simulation and controls</h3>
+  <div class="sig">
+    <p><code>New(Config) (*Sim, error)</code> · <code>AddNode(NodeID, NodeFactory) error</code> · <code>Start() error</code></p>
+    <p><code>RunUntil(Tick) error</code> · <code>RunSteps(uint64) error</code> · <code>RunUntilIdle() error</code></p>
+    <p><code>ScheduleFunc(Tick, string, func(*Sim) error) error</code> · <code>RegisterInvariant(Invariant)</code></p>
+    <p><code>Crash(NodeID) error</code> · <code>Restart(NodeID) error</code></p>
+    <p><code>Block(from, to NodeID) error</code> · <code>Unblock(from, to NodeID) error</code> · <code>Partition(groups ...[]NodeID) error</code> · <code>Isolate(NodeID) error</code> · <code>HealAll()</code></p>
+    <p><code>SetDropPermille(int) error</code> · <code>SetLatency(min, max Tick) error</code></p>
+    <p><code>Now() Tick</code> · <code>Steps() uint64</code> · <code>Stats() Stats</code> · <code>Seed() uint64</code> · <code>Scenario() string</code></p>
+    <p><code>TraceHash() uint64</code> · <code>StateHash() uint64</code> · <code>TraceTail(int) []string</code> · <code>Failed() error</code></p>
+  </div>
+
+  <h3>Invariants and snapshots</h3>
+  <div class="sig">
+    <p><code>type Invariant interface { Name() string; Check(*Sim) error }</code></p>
+    <p><code>NewInvariant(name string, fn func(*Sim) error) Invariant</code></p>
+    <p><code>type Snapshotter interface { Snapshot() []byte }</code></p>
+    <p>Stateful checks are allowed; mutating simulation state, scheduling events, and drawing randomness are not.</p>
+  </div>
+
+  <h3>Failure</h3>
+  <div class="sig">
+    <p><code>type Failure struct</code> — seed, scenario, version, step, tick, event, invariant, cause, replay, trace tail.</p>
+    <p><code>Error() string</code> — deterministic report format. <code>Unwrap() error</code> — exposes the cause.</p>
+  </div>
+</section>
+
+<!-- ============================ APPENDIX C ============================ -->
+<section class="section">
+  <span class="badge">Appendix C</span>
+  <h2>Reproduction guide</h2>
+
+  <p class="lead">
+    These commands reproduce every Stage 1 result on the recorded toolchain. They
+    are also the commands printed in the README and, where applicable, in failure
+    reports.
+  </p>
+
+  <h3>Environment</h3>
+  <table>
+    <tbody>
+      <tr><td style="width:30%"><strong>Module</strong></td><td><code>raftkv</code>, Go directive <code>1.24</code></td></tr>
+      <tr><td><strong>Verified toolchain</strong></td><td>Go 1.27.4 darwin/arm64</td></tr>
+      <tr><td><strong>Repository</strong></td><td><code>vaibhavraj082007/Raft-Based-Distributed-Database-Management-System</code></td></tr>
+      <tr><td><strong>Stage 1 commit</strong></td><td><code>0c7d5fb</code></td></tr>
+      <tr><td><strong>Golden file</strong></td><td><code>testdata/stage1/ping-seed-42.trace</code></td></tr>
+    </tbody>
+  </table>
+
+  <h3>Verification</h3>
+  <pre><code>go test ./...
+go test -race ./...
+go vet ./...
+go test ./... -shuffle=on -count=1
+go test ./internal/scenarios -run TestSameSeedProducesIdenticalTrace -count=5
+
+# Reproduce the golden file (only after an intentional semantic change):
+go test ./internal/scenarios -run TestGoldenTraceSeed42 -update
+
+# Reproduce the 500-tick sample:
+go run ./cmd/simctl -seed 42 -scenario ping -ticks 500
+
+# Stream the trace:
+go run ./cmd/simctl -seed 42 -scenario ping -ticks 500 -trace
+
+# Include RNG decision records:
+go run ./cmd/simctl -seed 42 -scenario ping -ticks 120 -trace -decisions</code></pre>
+
+  <h3>Expected Stage 1 summary</h3>
+  <pre><code>run v=1 seed=42 scenario=ping nodes=5 end-tick=500 status=ok
+steps=504 events=504 sent=176 delivered=80 dropped=96 disk-ops=277 \
+  boots=7 crashes=2 restarts=2
+trace-hash=25895005889e1714 state-hash=c38a6906689885f9</code></pre>
+
+  <h3>Failure replay</h3>
+  <p>
+    The failure report prints its own command. The shape is:
+  </p>
+  <pre><code>go run ./cmd/simctl -seed &lt;N&gt; -scenario &lt;name&gt; -ticks &lt;T&gt; -trace</code></pre>
+  <p>
+    For a test-only failure, rerun the named test first; the invariant test and the
+    simulation both report enough context to locate the failing step.
+  </p>
+
+  <h3>Useful make targets</h3>
+  <table>
+    <thead><tr><th style="width:24%">Target</th><th>Command</th></tr></thead>
+    <tbody>
+      <tr><td><code>make test</code></td><td><code>go test ./...</code></td></tr>
+      <tr><td><code>make test-race</code></td><td><code>go test -race ./...</code></td></tr>
+      <tr><td><code>make vet</code></td><td><code>go vet ./...</code></td></tr>
+      <tr><td><code>make fmt</code></td><td><code>gofmt -w .</code></td></tr>
+      <tr><td><code>make sim</code></td><td><code>go run ./cmd/simctl -seed 1 -scenario ping -trace</code></td></tr>
+    </tbody>
+  </table>
+
+  <div class="end-note">
+    The report itself is not part of the Go build. It is a snapshot document under
+    <span class="mono">docs/reports/</span>; the simulator and tests remain the
+    source of truth.
+  </div>
+</section>
+
+<!-- ============================ APPENDIX D ============================ -->
+<section class="section">
+  <span class="badge">Appendix D</span>
+  <h2>Test inventory — all 41 tests</h2>
+
+  <p class="lead">
+    Every test below passed in the final verification run. The grouping mirrors the
+    package layout and the Stage 1 plan.
+  </p>
+
+  <h3>Command line — 1 test</h3>
+  <table>
+    <thead><tr><th style="width:46%">Test</th><th>Assertion</th></tr></thead>
+    <tbody>
+      <tr><td><code>TestCLIReplayAcrossProcesses</code></td><td>Builds the binary, runs it twice with one seed, and compares bytes; also checks different seeds differ and a negative seed is rejected.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Scenarios — 6 tests</h3>
+  <table>
+    <thead><tr><th style="width:46%">Test</th><th>Assertion</th></tr></thead>
+    <tbody>
+      <tr><td><code>TestSameSeedProducesIdenticalTrace</code></td><td>Three fresh runs: identical trace bytes, trace hash, and state hash.</td></tr>
+      <tr><td><code>TestInterleavedSimsDoNotShareState</code></td><td>Alternating single steps of two simulators produce the same trace as a solo run.</td></tr>
+      <tr><td><code>TestDifferentSeedsDiffer</code></td><td>Seeds 1 and 2 produce different trace and state hashes.</td></tr>
+      <tr><td><code>TestGoldenTraceSeed42</code></td><td>Seed 42, 120 ticks matches the checked-in golden trace byte for byte.</td></tr>
+      <tr><td><code>TestPingInvariantAcrossMultipleRestarts</code></td><td>Three forced restarts; recovery never exceeds cumulative synced records; incarnation 4 is verified.</td></tr>
+      <tr><td><code>Test100SeedSmoke</code></td><td>Seeds 1–100 complete 300 ticks each with invariants intact.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Disk — 10 tests</h3>
+  <table>
+    <thead><tr><th style="width:46%">Test</th><th>Assertion</th></tr></thead>
+    <tbody>
+      <tr><td><code>TestDiskReadYourWritesBeforeSync</code></td><td>Completed unsynced appends are visible to reads.</td></tr>
+      <tr><td><code>TestDiskUnsyncedDataLostOnCrash</code></td><td>Visible data reverts to durable state after a crash.</td></tr>
+      <tr><td><code>TestDiskSyncedDataSurvivesRestart</code></td><td>Synced data survives a fresh incarnation.</td></tr>
+      <tr><td><code>TestDiskPendingOpsCanceledOnCrash</code></td><td>No completion is delivered for an operation pending at crash time.</td></tr>
+      <tr><td><code>TestDiskFIFO</code></td><td>Completions occur in issue order with the expected tags.</td></tr>
+      <tr><td><code>TestDiskSyncCoversPriorAppends</code></td><td>One sync persists all preceding appends.</td></tr>
+      <tr><td><code>TestDiskListAndRecovery</code></td><td>Sorted file listing and contents survive restart for WAL-style recovery.</td></tr>
+      <tr><td><code>TestDiskReplace</code></td><td>Atomic replace, later append, and restart all behave correctly.</td></tr>
+      <tr><td><code>TestDiskCompletionLatency</code></td><td>No completion arrives before the configured latency elapses.</td></tr>
+      <tr><td><code>TestDiskReadMissingFile</code></td><td>Reading a missing file returns empty data with no error.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Network — 8 tests</h3>
+  <table>
+    <thead><tr><th style="width:46%">Test</th><th>Assertion</th></tr></thead>
+    <tbody>
+      <tr><td><code>TestNetworkLatencyWithinBounds</code></td><td>Every delivery falls inside the inclusive latency range.</td></tr>
+      <tr><td><code>TestNetworkDropRate</code></td><td>A 25% loss setting over 10,000 sends lands in the expected statistical band.</td></tr>
+      <tr><td><code>TestNetworkDropAll</code></td><td>100% loss delivers nothing.</td></tr>
+      <tr><td><code>TestNetworkPartitionBothDirections</code></td><td>No message crosses a partition in either direction; healing restores delivery.</td></tr>
+      <tr><td><code>TestNetworkHeal</code></td><td>A message sent during a partition is lost, while a post-heal message arrives.</td></tr>
+      <tr><td><code>TestInFlightMessageDroppedWhenPartitionForms</code></td><td>A message already in flight is dropped when the link is cut before delivery.</td></tr>
+      <tr><td><code>TestMessagePayloadIsolation</code></td><td>Mutating the sender's slice after send does not change delivered bytes.</td></tr>
+      <tr><td><code>TestCrashDropsInFlightMessages</code></td><td>A message sent before a crash never reaches the restarted node.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>RNG — 4 tests</h3>
+  <table>
+    <thead><tr><th style="width:46%">Test</th><th>Assertion</th></tr></thead>
+    <tbody>
+      <tr><td><code>TestRNGGoldenVectors</code></td><td>Seed 0 matches six frozen SplitMix64 outputs.</td></tr>
+      <tr><td><code>TestRNGSeedReplay</code></td><td>Two generators with seed 42 produce 100 identical draws.</td></tr>
+      <tr><td><code>TestRNGDifferentSeedsDiffer</code></td><td>Seeds 1 and 2 do not accidentally share a stream.</td></tr>
+      <tr><td><code>TestRNGIntRange</code></td><td>10,000 draws each for inclusive int and int64 ranges stay in bounds.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Simulator, lifecycle, and invariants — 11 tests</h3>
+  <table>
+    <thead><tr><th style="width:46%">Test</th><th>Assertion</th></tr></thead>
+    <tbody>
+      <tr><td><code>TestRunUntilAdvancesIdleClock</code></td><td>An empty queue advances to the target tick without steps.</td></tr>
+      <tr><td><code>TestSameTickOrdering</code></td><td>Same-tick events run in scheduling order, including nested scheduling.</td></tr>
+      <tr><td><code>TestSchedulePastRejected</code></td><td>Scheduling in the past returns a deterministic error.</td></tr>
+      <tr><td><code>TestTimersFireOnce</code></td><td>A timer fires exactly once with the expected tag.</td></tr>
+      <tr><td><code>TestCancelTimer</code></td><td>A canceled timer never fires.</td></tr>
+      <tr><td><code>TestMaxStepsGuard</code></td><td>An infinite same-tick loop fails with a replayable <code>Failure</code>.</td></tr>
+      <tr><td><code>TestInvariantRunsEveryStep</code></td><td>Check count equals dispatched events plus one final check.</td></tr>
+      <tr><td><code>TestInvariantFailureReport</code></td><td>Failure includes seed, step, invariant, replay command, and trace tail.</td></tr>
+      <tr><td><code>TestPanicIsCaptured</code></td><td>A node panic becomes a <code>Failure</code> with the panic text and seed.</td></tr>
+      <tr><td><code>TestFreshNodeFactoryOnRestart</code></td><td>Restart calls the factory again and starts a new object, not the old one.</td></tr>
+      <tr><td><code>TestTimerAndIOEpochFiltering</code></td><td>Stale timers and disk completions from a prior incarnation are ignored.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Static guard — 1 test</h3>
+  <table>
+    <thead><tr><th style="width:46%">Test</th><th>Assertion</th></tr></thead>
+    <tbody>
+      <tr><td><code>TestNoForbiddenAPIs</code></td><td>AST scan of <code>internal/sim</code>, <code>raft</code>, <code>storage</code>, <code>kv</code>, and <code>scenarios</code> finds no banned concurrency, time, network, RNG, or system APIs.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout" style="margin-top:6mm">
+    <strong>41 tests. 3 packages. 0 failures.</strong> The suite is reproducible with
+    <code>go test ./... -count=1</code>.
+  </div>
+</section>
+
+</body>
+</html>

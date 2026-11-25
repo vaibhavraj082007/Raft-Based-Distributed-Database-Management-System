@@ -11,10 +11,14 @@ failure.
 
 ## Status
 
-**Stage 1 — deterministic simulator — implemented and awaiting approval.**
+**Stage 1 — deterministic simulator — Complete (approved 2026-11-25, commit `0c7d5fb`).**
 
-The simulator, chaos scenario, CLI, golden trace, and full Stage 1 test suite are
-in place. No Stage 2 code exists. The specification is in [PLAN.md](PLAN.md).
+**Stage 2 — Raft — Plan under review.**
+
+The Stage 1 simulator, chaos scenario, CLI, golden trace, and full test suite are
+approved and pushed. No `internal/raft` implementation exists yet. Stage 1 is
+specified in [PLAN.md](PLAN.md); Stage 2 is specified in
+[PLAN_STAGE2.md](PLAN_STAGE2.md) and begins only after that plan is approved.
 
 Verified commands:
 
@@ -25,6 +29,9 @@ go vet ./...
 go test ./internal/scenarios -run TestSameSeedProducesIdenticalTrace -count=5
 go run ./cmd/simctl -seed 42 -scenario ping -ticks 500 -trace
 ```
+
+The Stage 2 verification matrix and gate commands are in
+[PLAN_STAGE2.md](PLAN_STAGE2.md).
 
 ## Non-negotiable rules
 
@@ -45,8 +52,8 @@ go run ./cmd/simctl -seed 42 -scenario ping -ticks 500 -trace
 
 | Stage | Layer | Package | Status |
 |------:|-------|---------|--------|
-| 1 | Deterministic simulator (clock, network, disk, RNG, trace, invariants) | `internal/sim` | Complete, awaiting approval |
-| 2 | Raft (election and replication, Raft paper Figure 2) | `internal/raft` | Not started |
+| 1 | Deterministic simulator (clock, network, disk, RNG, trace, invariants) | `internal/sim` | Complete (approved) |
+| 2 | Raft (election and replication, Raft paper Figure 2) | `internal/raft` | Plan under review |
 | 3 | Storage engine (WAL, then LSM-tree) | `internal/storage` | Not started |
 | 4 | Linearizable KV API with client request ID deduplication | `internal/kv` | Not started |
 | 5 | Sharding, multi-shard transactions | TBD | Not started |
@@ -60,6 +67,7 @@ Simulation code is single-threaded and event-driven.
 ```text
 .
 ├── PLAN.md                 # Stage 1 specification
+├── PLAN_STAGE2.md          # Stage 2 Raft specification (under review)
 ├── README.md
 ├── Makefile
 ├── go.mod
@@ -67,12 +75,14 @@ Simulation code is single-threaded and event-driven.
 │   └── simctl/             # run a scenario by seed, print trace/hashes
 ├── internal/
 │   ├── sim/                # event queue, RNG, network, disk, trace, invariants
-│   ├── raft/               # Stage 2, intentionally empty
+│   ├── raft/               # Stage 2, intentionally empty until approval
 │   ├── storage/            # later
 │   ├── kv/                 # later
-│   └── scenarios/          # ping/journal workload + chaos driver
-└── testdata/stage1/
-    └── ping-seed-42.trace  # byte-exact golden trace
+│   └── scenarios/          # ping workload + planned raft Troublemaker
+├── testdata/
+│   ├── stage1/
+│   │   └── ping-seed-42.trace
+│   └── stage2/             # planned raft-seed-42.trace
 ```
 
 Stage 1 includes a frozen SplitMix64 PRNG, stable `(tick, sequence)` event
@@ -111,20 +121,49 @@ make test-race     # go test -race ./...
 make vet           # go vet ./...
 make sim           # go run ./cmd/simctl -seed 1 -scenario ping -trace
 
-# Replay a failing seed (the failure report prints the exact command):
+# Replay a failing Stage 1 seed (the failure report prints the exact command):
 go run ./cmd/simctl -seed <N> -scenario ping -ticks <T> -trace
 ```
 
-Regenerate the reviewed golden trace after an intentional behavior change:
+Once Stage 2 is approved and implemented, these commands are added:
+
+```sh
+make sim-raft      # go run ./cmd/simctl -seed 1 -scenario raft -ticks 400 -trace
+make stress-raft SEEDS=10000   # explicit 10,000-seed Raft stress target
+
+# Replay a failing Raft seed:
+go run ./cmd/simctl -seed <N> -scenario raft -ticks <T> -trace
+```
+
+Regenerate the reviewed golden traces after an intentional behavior change:
 
 ```sh
 go test ./internal/scenarios -run TestGoldenTraceSeed42 -update
+go test ./internal/scenarios -run TestRaftGoldenTraceSeed42 -update   # after Stage 2
 ```
+
+## Stage 2 plan (under review)
+
+Stage 2 is split into three independently testable gates, specified in
+[PLAN_STAGE2.md](PLAN_STAGE2.md):
+
+- **2A — Election and durable vote state:** roles, randomized timeouts,
+  `RequestVote`, and crash-safe `currentTerm`/`votedFor`.
+- **2B — Replication and commit safety:** `AppendEntries`, conflict
+  backtracking, durable append/truncate, and the Figure 8 current-term commit
+  rule.
+- **2C — Troublemaker:** the 5-node `raft` scenario, client commands,
+  crashes/restarts, drops/delays/partitions, per-step safety invariants, golden
+  trace, and the 10,000-seed stress target.
+
+No `internal/raft` code is written until the plan is approved.
 
 ## Bug log
 
 Every bug found by the simulator must be recorded here before its fix is
-accepted. The seed, scenario, and regression test are mandatory.
+accepted. The seed, scenario, and regression test are mandatory. Stage 2 bugs
+are appended as `S2-00N` with the same fields; the Stage 1 entry below remains
+as the first record.
 
 | ID | Stage | Seed | Symptom | Root cause | Fix | Regression test |
 |----|------:|-----:|---------|------------|-----|-----------------|
@@ -138,5 +177,9 @@ A stage is complete only when:
 2. Implementation and tests are complete.
 3. `go test ./...` and `go vet ./...` pass.
 4. Test output has been shown and the user has approved moving on.
+
+For Stage 2, each of 2A, 2B, and 2C has its own gate and verification commands
+in [PLAN_STAGE2.md](PLAN_STAGE2.md). The full 10,000-seed stress run is required
+before Stage 2 is presented for final approval.
 
 No code for a later stage is written early.
