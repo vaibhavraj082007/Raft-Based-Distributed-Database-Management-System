@@ -2,6 +2,7 @@ package raft
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"raftkv/internal/sim"
@@ -55,33 +56,67 @@ func (n *Node) View() View {
 // iterates a map and never includes pointers or wall-clock data.
 func (n *Node) Snapshot() []byte {
 	var b strings.Builder
-	fmt.Fprintf(&b, "raft id=%d inc=%d role=%d term=%d vote=%d dterm=%d dvote=%d leader=%d commit=%d applied=%d dlast=%d recovering=%t busy=%t next=%d et=%d ht=%d self=%t\n",
+	fmt.Fprintf(&b, "raft id=%d inc=%d role=%d term=%d vote=%d dterm=%d dvote=%d leader=%d commit=%d applied=%d dlast=%d logbytes=%d recovering=%t mrec=%t lrec=%t busy=%t next=%d et=%d ht=%d self=%t\n",
 		n.id, n.incarnation, n.role, n.currentTerm, n.votedFor,
 		n.durableTerm, n.durableVotedFor, n.leaderID, n.commitIndex,
-		n.lastApplied, n.durableLastIndex, n.recovering, n.busy, n.nextIO,
+		n.lastApplied, n.durableLastIndex, n.logBytes, n.recovering,
+		n.metaRecovered, n.logRecovered, n.busy, n.nextIO,
 		n.electionTimer, n.heartbeatTimer, n.selfVoted)
-	fmt.Fprintf(&b, "cfg hb=%d emin=%d emax=%d\n",
-		n.cfg.HeartbeatInterval, n.cfg.ElectionTimeoutMin, n.cfg.ElectionTimeoutMax)
+	fmt.Fprintf(&b, "cfg hb=%d emin=%d emax=%d maxappend=%d\n",
+		n.cfg.HeartbeatInterval, n.cfg.ElectionTimeoutMin, n.cfg.ElectionTimeoutMax,
+		n.cfg.MaxAppendEntries)
 	fmt.Fprintf(&b, "peers %d", len(n.peers))
 	for _, peer := range n.peers {
 		fmt.Fprintf(&b, " %d", peer)
 	}
 	b.WriteByte('\n')
 	fmt.Fprintf(&b, "log %d\n", len(n.log))
-	for _, entry := range n.log {
-		fmt.Fprintf(&b, "%d %d %d %x\n", entry.Index, entry.Term, entry.Kind, entry.Data)
-	}
+	writeSnapshotEntries(&b, n.log)
 	fmt.Fprintf(&b, "votes %d\n", len(n.votesGranted))
 	for i, granted := range n.votesGranted {
 		fmt.Fprintf(&b, "%d %t\n", i, granted)
 	}
+	fmt.Fprintf(&b, "next %d\n", len(n.nextIndex))
+	for i, index := range n.nextIndex {
+		fmt.Fprintf(&b, "%d %d\n", i, index)
+	}
+	fmt.Fprintf(&b, "match %d\n", len(n.matchIndex))
+	for i, index := range n.matchIndex {
+		fmt.Fprintf(&b, "%d %d\n", i, index)
+	}
+
+	keys := make([]uint64, 0, len(n.pendingClients))
+	for index := range n.pendingClients {
+		keys = append(keys, index)
+	}
+	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
+	fmt.Fprintf(&b, "clients %d\n", len(keys))
+	for _, index := range keys {
+		ref := n.pendingClients[index]
+		fmt.Fprintf(&b, "%d %d %d\n", index, ref.ClientID, ref.Seq)
+	}
+
+	if n.recoveredMeta != nil || n.recoveredLog != nil {
+		fmt.Fprintf(&b, "recovered meta=%x log=%x\n", n.recoveredMeta, n.recoveredLog)
+	} else {
+		b.WriteString("recovered none\n")
+	}
+
 	if p := n.pending; p != nil {
-		fmt.Fprintf(&b, "pending action=%d phase=%d write=%d sync=%d term=%d vote=%d peer=%d grant=%t success=%t restart=%t\n",
-			p.action, p.phase, p.tagWrite, p.tagSync, p.term, p.vote,
-			p.peer, p.grant, p.success, p.restartTimer)
+		fmt.Fprintf(&b, "pending kind=%d action=%d phase=%d write=%d sync=%d mterm=%d mvote=%d grant=%t reset=%t\n",
+			p.kind, p.action, p.phase, p.tagWrite, p.tagSync,
+			p.metaTerm, p.metaVote, p.grant, p.resetElection)
+		fmt.Fprintf(&b, "request %d %d %d %d %d %d %d %d\n",
+			p.request.peer, p.request.term, p.request.prevIndex,
+			p.request.prevTerm, p.request.leaderCommit,
+			p.request.clientID, p.request.clientSeq, len(p.request.entries))
+		writeSnapshotEntries(&b, p.request.entries)
+		fmt.Fprintf(&b, "batch %d %d\n", p.batch.baseIndex, len(p.batch.entries))
+		writeSnapshotEntries(&b, p.batch.entries)
 	} else {
 		b.WriteString("pending none\n")
 	}
+
 	fmt.Fprintf(&b, "inbox %d\n", len(n.inbox))
 	for _, in := range n.inbox {
 		if in.kind == inboundMessage {
@@ -92,4 +127,10 @@ func (n *Node) Snapshot() []byte {
 		fmt.Fprintf(&b, "timer %d %d %d\n", in.kind, in.timer.ID, in.timer.Tag)
 	}
 	return []byte(b.String())
+}
+
+func writeSnapshotEntries(b *strings.Builder, entries []Entry) {
+	for _, entry := range entries {
+		fmt.Fprintf(b, "%d %d %d %x\n", entry.Index, entry.Term, entry.Kind, entry.Data)
+	}
 }

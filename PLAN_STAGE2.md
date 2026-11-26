@@ -1,19 +1,21 @@
 # Stage 2 — Raft: 5-Node Deterministic Cluster
 
-**Status:** Approved 2026-11-25; 2A implemented 2026-11-26, 2B–2C pending
+**Status:** Approved 2026-11-25; 2A approved 2026-11-26; 2B implemented 2026-11-26, awaiting gate approval; 2C pending
 **Date:** 2026-11-25
 **Scope:** A from-scratch, actor-based Raft implementation in `internal/raft`,
 a deterministic `raft` scenario named **Troublemaker**, per-step safety
 invariants, golden replay, and targeted Figure 8 and crash-durability tests.
 **Depends on:** Stage 1 complete and approved (commit `0c7d5fb`).
 **Approval gate:** Approved. Implementation proceeds one sub-phase at a time;
-2B and 2C remain gated on acceptance of the preceding sub-phase.
+2C remains gated on acceptance of 2B.
 
 **Implementation status:**
 
-- **2A:** Implemented in `internal/raft`; awaiting gate approval. Includes
-  empty `AppendEntries` heartbeats and the `raft.election-safety` invariant.
-- **2B:** Not started.
+- **2A:** Approved 2026-11-26. Actor-based election, empty `AppendEntries`
+  heartbeats, durable term/vote, and the `raft.election-safety` invariant.
+- **2B:** Implemented 2026-11-26, awaiting gate approval. Leader no-op, durable
+  log persistence, replication and conflict backtracking, commit/apply with the
+  Figure 8 rule, restart replay, and client request handling.
 - **2C:** Not started.
 
 ---
@@ -162,6 +164,8 @@ Deliverables:
 - Apply hook in index order, exactly once per incarnation.
 - Stale/delayed RPC rejection and defensive checks against truncating
   committed entries.
+- Leader/follower client request handling and the exported client codecs; the
+  scenario client actor itself remains in 2C.
 - Targeted Figure 8 unit and integration tests.
 
 Gate 2B:

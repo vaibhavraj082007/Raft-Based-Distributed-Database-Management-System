@@ -39,8 +39,8 @@ type testAppend struct {
 }
 
 // testEnv is a deterministic sim.Env with a manually driven disk and clock.
-// It models the simulator's durable/visible split: Replace changes only the
-// visible bytes, Sync promotes them, and crash discards unsynced bytes.
+// It models the simulator's durable/visible split: Append/Replace change only
+// visible bytes, Sync promotes every file, and crash discards unsynced bytes.
 type testEnv struct {
 	id  sim.NodeID
 	now sim.Tick
@@ -58,8 +58,8 @@ type testEnv struct {
 	intRangeCalls [][2]int
 	intnCalls     []int
 
-	metaVisible []byte
-	metaDurable []byte
+	visible map[string][]byte
+	durable map[string][]byte
 }
 
 func newTestEnv(id sim.NodeID) *testEnv {
@@ -67,6 +67,8 @@ func newTestEnv(id sim.NodeID) *testEnv {
 		id:          id,
 		timers:      make(map[sim.TimerID]sim.TimerEvent),
 		timerDelays: make(map[sim.TimerID]sim.Tick),
+		visible:     make(map[string][]byte),
+		durable:     make(map[string][]byte),
 	}
 }
 
@@ -131,16 +133,12 @@ func (e *testEnv) Read(tag uint64, name string, off, n int64) {
 
 func (e *testEnv) Append(tag uint64, name string, data []byte) {
 	e.appends = append(e.appends, testAppend{tag: tag, name: name, data: cloneTestBytes(data)})
-	if name == metaFile {
-		e.metaVisible = append(e.metaVisible, data...)
-	}
+	e.visible[name] = append(e.visible[name], data...)
 }
 
 func (e *testEnv) Replace(tag uint64, name string, data []byte) {
 	e.replaces = append(e.replaces, testReplace{tag: tag, name: name, data: cloneTestBytes(data)})
-	if name == metaFile {
-		e.metaVisible = cloneTestBytes(data)
-	}
+	e.visible[name] = cloneTestBytes(data)
 }
 
 func (e *testEnv) Sync(tag uint64) {
@@ -148,19 +146,21 @@ func (e *testEnv) Sync(tag uint64) {
 }
 
 func (e *testEnv) completeSync(tag uint64) {
-	e.metaDurable = cloneTestBytes(e.metaVisible)
+	e.durable[metaFile] = cloneTestBytes(e.visible[metaFile])
+	e.durable[logFile] = cloneTestBytes(e.visible[logFile])
 }
 
 func (e *testEnv) List(tag uint64) {}
 
 func (e *testEnv) crash() {
-	e.metaVisible = cloneTestBytes(e.metaDurable)
+	e.visible[metaFile] = cloneTestBytes(e.durable[metaFile])
+	e.visible[logFile] = cloneTestBytes(e.durable[logFile])
 	e.timers = make(map[sim.TimerID]sim.TimerEvent)
 	e.timerDelays = make(map[sim.TimerID]sim.Tick)
 }
 
-func (e *testEnv) readData() []byte {
-	return cloneTestBytes(e.metaDurable)
+func (e *testEnv) fileData(name string) []byte {
+	return cloneTestBytes(e.durable[name])
 }
 
 func (e *testEnv) clearTraffic() {
@@ -176,6 +176,13 @@ func (e *testEnv) lastReplace() testReplace {
 		panic("testEnv: no replace")
 	}
 	return e.replaces[len(e.replaces)-1]
+}
+
+func (e *testEnv) lastAppend() testAppend {
+	if len(e.appends) == 0 {
+		panic("testEnv: no append")
+	}
+	return e.appends[len(e.appends)-1]
 }
 
 func (e *testEnv) lastSync() testSync {
@@ -233,6 +240,15 @@ func cloneTestBytes(b []byte) []byte {
 	return out
 }
 
+func completeBoot(t *testing.T, env *testEnv, n *Node) {
+	t.Helper()
+	reads := env.reads
+	env.reads = nil
+	for _, read := range reads {
+		n.HandleIO(sim.IOEvent{Tag: read.tag, Op: sim.IORead, Data: env.fileData(read.name)})
+	}
+}
+
 func bootTestNode(t *testing.T, env *testEnv, id sim.NodeID, peers []sim.NodeID) *Node {
 	t.Helper()
 	factory := NewFactory(Config{ID: id, Peers: peers})
@@ -242,15 +258,26 @@ func bootTestNode(t *testing.T, env *testEnv, id sim.NodeID, peers []sim.NodeID)
 		t.Fatalf("factory returned %T, want *Node", created)
 	}
 	n.Start()
-	read := env.lastRead()
-	n.HandleIO(sim.IOEvent{Tag: read.tag, Op: sim.IORead, Data: env.readData()})
+	completeBoot(t, env, n)
 	return n
 }
 
 func completeReplace(t *testing.T, env *testEnv, n *Node) {
 	t.Helper()
 	replace := env.lastReplace()
+	if n.pending == nil || n.pending.kind != persistMeta || replace.tag != n.pending.tagWrite {
+		t.Fatalf("last replace tag %d does not match pending meta write", replace.tag)
+	}
 	n.HandleIO(sim.IOEvent{Tag: replace.tag, Op: sim.IOReplace})
+}
+
+func completeAppend(t *testing.T, env *testEnv, n *Node) {
+	t.Helper()
+	appendOp := env.lastAppend()
+	if n.pending == nil || n.pending.kind != persistLog || appendOp.tag != n.pending.tagWrite {
+		t.Fatalf("last append tag %d does not match pending log write", appendOp.tag)
+	}
+	n.HandleIO(sim.IOEvent{Tag: appendOp.tag, Op: sim.IOAppend})
 }
 
 func deliverSync(t *testing.T, env *testEnv, n *Node, tag uint64) {
@@ -261,9 +288,26 @@ func deliverSync(t *testing.T, env *testEnv, n *Node, tag uint64) {
 
 func completePersist(t *testing.T, env *testEnv, n *Node) {
 	t.Helper()
-	completeReplace(t, env, n)
+	if !n.busy || n.pending == nil {
+		t.Fatalf("node is not busy")
+	}
+	switch n.pending.kind {
+	case persistMeta:
+		completeReplace(t, env, n)
+	case persistLog:
+		completeAppend(t, env, n)
+	default:
+		t.Fatalf("unknown persist kind %d", n.pending.kind)
+	}
 	sync := env.lastSync()
 	deliverSync(t, env, n, sync.tag)
+}
+
+func completeAllPersist(t *testing.T, env *testEnv, n *Node) {
+	t.Helper()
+	for n.busy {
+		completePersist(t, env, n)
+	}
 }
 
 func fireElectionTimer(t *testing.T, env *testEnv, n *Node) {
@@ -309,11 +353,27 @@ func heartbeatMessage(from sim.NodeID, term uint64) sim.Message {
 	}
 }
 
+func appendRequestMessage(from sim.NodeID, req AppendRequest) sim.Message {
+	return sim.Message{
+		From:    from,
+		Kind:    KindAppendRequest,
+		Payload: encodeAppendRequest(req),
+	}
+}
+
 func appendResponseMessage(from sim.NodeID, term uint64, success bool) sim.Message {
 	return sim.Message{
 		From:    from,
 		Kind:    KindAppendResponse,
 		Payload: encodeAppendResponse(AppendResponse{Term: term, Success: success}),
+	}
+}
+
+func appendResponseMessageFull(from sim.NodeID, resp AppendResponse) sim.Message {
+	return sim.Message{
+		From:    from,
+		Kind:    KindAppendResponse,
+		Payload: encodeAppendResponse(resp),
 	}
 }
 
@@ -328,6 +388,10 @@ func mustPanic(t *testing.T, what string, fn func()) {
 }
 
 func newRaftSim(t *testing.T, seed uint64, nodeCount int) (*sim.Sim, []sim.NodeID) {
+	return newRaftSimApply(t, seed, nodeCount, nil)
+}
+
+func newRaftSimApply(t *testing.T, seed uint64, nodeCount int, apply func(sim.NodeID, Entry)) (*sim.Sim, []sim.NodeID) {
 	t.Helper()
 	s, err := sim.New(sim.Config{Seed: seed, Scenario: "raft-test"})
 	if err != nil {
@@ -344,7 +408,12 @@ func newRaftSim(t *testing.T, seed uint64, nodeCount int) (*sim.Sim, []sim.NodeI
 				peers = append(peers, other)
 			}
 		}
-		if err := s.AddNode(id, NewFactory(Config{ID: id, Peers: peers})); err != nil {
+		cfg := Config{ID: id, Peers: peers}
+		if apply != nil {
+			nodeID := id
+			cfg.Apply = func(e Entry) { apply(nodeID, e) }
+		}
+		if err := s.AddNode(id, NewFactory(cfg)); err != nil {
 			t.Fatalf("AddNode(%d): %v", id, err)
 		}
 	}

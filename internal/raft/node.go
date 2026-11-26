@@ -17,21 +17,27 @@ func NewFactory(cfg Config) sim.NodeFactory {
 	return func(env sim.Env) sim.Node {
 		incarnation++
 		return &Node{
-			env:          env,
-			cfg:          cfg,
-			id:           cfg.ID,
-			peers:        append([]sim.NodeID(nil), peers...),
-			incarnation:  incarnation,
-			log:          []Entry{{Index: 0, Term: 0, Kind: EntrySentinel}},
-			votesGranted: make([]bool, len(peers)),
-			nextIO:       firstRuntimeTag - 1,
+			env:            env,
+			cfg:            cfg,
+			id:             cfg.ID,
+			peers:          append([]sim.NodeID(nil), peers...),
+			incarnation:    incarnation,
+			log:            []Entry{{Index: 0, Term: 0, Kind: EntrySentinel}},
+			votesGranted:   make([]bool, len(peers)),
+			pendingClients: make(map[uint64]clientRef),
+			nextIO:         firstRuntimeTag - 1,
 		}
 	}
 }
 
 func (n *Node) Start() {
 	n.recovering = true
+	n.metaRecovered = false
+	n.logRecovered = false
+	n.recoveredMeta = nil
+	n.recoveredLog = nil
 	n.env.Read(tagRecoverMeta, metaFile, 0, maxMetaFileSize+1)
+	n.env.Read(tagRecoverLog, logFile, 0, maxLogFileSize+1)
 }
 
 func (n *Node) HandleMessage(msg sim.Message) {
@@ -49,26 +55,7 @@ func (n *Node) HandleIO(ev sim.IOEvent) {
 		panic(fmt.Sprintf("raft: node %d IO %s tag %d: %v", n.id, ev.Op, ev.Tag, ev.Err))
 	}
 	if n.recovering {
-		if ev.Tag != tagRecoverMeta || ev.Op != sim.IORead {
-			panic(fmt.Sprintf("raft: node %d unexpected recovery IO tag=%d op=%s", n.id, ev.Tag, ev.Op))
-		}
-		if len(ev.Data) > maxMetaFileSize {
-			panic(fmt.Sprintf("raft: node %d raft.meta read %d bytes, cap %d", n.id, len(ev.Data), maxMetaFileSize))
-		}
-		term, vote := decodeMeta(ev.Data)
-		n.currentTerm = term
-		n.votedFor = vote
-		n.durableTerm = term
-		n.durableVotedFor = vote
-		n.role = Follower
-		n.leaderID = 0
-		n.selfVoted = false
-		for i := range n.votesGranted {
-			n.votesGranted[i] = false
-		}
-		n.recovering = false
-		n.scheduleElectionTimer()
-		n.pump()
+		n.handleRecoveryIO(ev)
 		return
 	}
 
@@ -78,23 +65,76 @@ func (n *Node) HandleIO(ev sim.IOEvent) {
 	}
 	switch p.phase {
 	case 1:
-		if ev.Tag != p.tagWrite || ev.Op != sim.IOReplace {
-			panic(fmt.Sprintf("raft: node %d expected replace tag=%d, got tag=%d op=%s", n.id, p.tagWrite, ev.Tag, ev.Op))
+		switch p.kind {
+		case persistMeta:
+			if ev.Tag != p.tagWrite || ev.Op != sim.IOReplace {
+				panic(fmt.Sprintf("raft: node %d expected replace tag=%d, got tag=%d op=%s",
+					n.id, p.tagWrite, ev.Tag, ev.Op))
+			}
+		case persistLog:
+			if ev.Tag != p.tagWrite || ev.Op != sim.IOAppend {
+				panic(fmt.Sprintf("raft: node %d expected append tag=%d, got tag=%d op=%s",
+					n.id, p.tagWrite, ev.Tag, ev.Op))
+			}
+		default:
+			panic(fmt.Sprintf("raft: node %d invalid persist kind %d", n.id, p.kind))
 		}
 		p.phase = 2
 		n.env.Sync(p.tagSync)
 	case 2:
 		if ev.Tag != p.tagSync || ev.Op != sim.IOSync {
-			panic(fmt.Sprintf("raft: node %d expected sync tag=%d, got tag=%d op=%s", n.id, p.tagSync, ev.Tag, ev.Op))
+			panic(fmt.Sprintf("raft: node %d expected sync tag=%d, got tag=%d op=%s",
+				n.id, p.tagSync, ev.Tag, ev.Op))
 		}
-		n.durableTerm = p.term
-		n.durableVotedFor = p.vote
+		switch p.kind {
+		case persistMeta:
+			n.durableTerm = p.metaTerm
+			n.durableVotedFor = p.metaVote
+		case persistLog:
+			n.durableLastIndex = p.batch.entries[len(p.batch.entries)-1].Index
+			n.logBytes += p.encodedLen
+		default:
+			panic(fmt.Sprintf("raft: node %d invalid persist kind %d", n.id, p.kind))
+		}
 		n.busy = false
 		n.pending = nil
 		n.continuePersist(p)
 		n.pump()
 	default:
 		panic(fmt.Sprintf("raft: node %d invalid persist phase %d", n.id, p.phase))
+	}
+}
+
+func (n *Node) handleRecoveryIO(ev sim.IOEvent) {
+	if ev.Op != sim.IORead {
+		panic(fmt.Sprintf("raft: node %d unexpected recovery IO tag=%d op=%s", n.id, ev.Tag, ev.Op))
+	}
+	switch ev.Tag {
+	case tagRecoverMeta:
+		if n.metaRecovered {
+			panic(fmt.Sprintf("raft: node %d duplicate meta recovery read", n.id))
+		}
+		if len(ev.Data) > maxMetaFileSize {
+			panic(fmt.Sprintf("raft: node %d raft.meta read %d bytes, cap %d",
+				n.id, len(ev.Data), maxMetaFileSize))
+		}
+		n.recoveredMeta = cloneEntryData(ev.Data)
+		n.metaRecovered = true
+	case tagRecoverLog:
+		if n.logRecovered {
+			panic(fmt.Sprintf("raft: node %d duplicate log recovery read", n.id))
+		}
+		if len(ev.Data) > maxLogFileSize {
+			panic(fmt.Sprintf("raft: node %d raft.log read %d bytes, cap %d",
+				n.id, len(ev.Data), maxLogFileSize))
+		}
+		n.recoveredLog = cloneEntryData(ev.Data)
+		n.logRecovered = true
+	default:
+		panic(fmt.Sprintf("raft: node %d unexpected recovery IO tag=%d", n.id, ev.Tag))
+	}
+	if n.metaRecovered && n.logRecovered {
+		n.finishRecovery()
 	}
 }
 
@@ -129,6 +169,10 @@ func (n *Node) handleMessage(msg sim.Message) {
 		n.handleAppendRequest(msg)
 	case KindAppendResponse:
 		n.handleAppendResponse(msg)
+	case KindClientRequest:
+		n.handleClientRequest(msg)
+	case KindClientResponse:
+		// Nodes never initiate client responses to other nodes.
 	default:
 		// Unknown kinds are ignored so later stages can add messages without
 		// breaking an older node.
@@ -146,78 +190,9 @@ func (n *Node) handleTimer(ev sim.TimerEvent) {
 	if ev.Tag == timerTagHeartbeat && ev.ID == n.heartbeatTimer {
 		n.heartbeatTimer = 0
 		if n.role == Leader {
-			n.sendHeartbeats()
+			n.broadcastAppendEntries()
 			n.scheduleHeartbeatTimer()
 		}
-	}
-}
-
-func (n *Node) beginMetaPersist(term uint64, vote sim.NodeID, action persistAction, peer sim.NodeID, grant, success, restartTimer bool) {
-	if n.busy {
-		panic(fmt.Sprintf("raft: node %d started a second persistence batch", n.id))
-	}
-	n.nextIO++
-	tagWrite := n.nextIO
-	n.nextIO++
-	tagSync := n.nextIO
-
-	n.busy = true
-	n.pending = &pendingPersist{
-		action:       action,
-		phase:        1,
-		tagWrite:     tagWrite,
-		tagSync:      tagSync,
-		term:         term,
-		vote:         vote,
-		peer:         peer,
-		grant:        grant,
-		success:      success,
-		restartTimer: restartTimer,
-	}
-	n.env.Replace(tagWrite, metaFile, encodeMeta(term, vote))
-}
-
-func (n *Node) continuePersist(p *pendingPersist) {
-	switch p.action {
-	case actionElectionSelfVote:
-		if n.role != Candidate || n.currentTerm != p.term || n.votedFor != p.vote {
-			panic(fmt.Sprintf("raft: node %d election continuation role=%s term=%d vote=%d, want candidate/%d/%d",
-				n.id, n.role, n.currentTerm, n.votedFor, p.term, p.vote))
-		}
-		n.selfVoted = true
-		if len(n.peers) == 0 {
-			n.becomeLeader()
-			return
-		}
-		for _, peer := range n.peers {
-			n.sendVoteRequest(peer)
-		}
-		n.resetElectionTimer()
-	case actionVoteReply:
-		if n.currentTerm != p.term {
-			return
-		}
-		if p.restartTimer {
-			n.resetElectionTimer()
-		}
-		n.sendVoteResponse(p.peer, p.term, p.grant)
-	case actionAppendReply:
-		if n.currentTerm != p.term {
-			return
-		}
-		if p.restartTimer {
-			n.resetElectionTimer()
-		}
-		n.sendAppendResponse(p.peer, p.term, p.success)
-	case actionStepDown:
-		if n.currentTerm != p.term {
-			return
-		}
-		if p.restartTimer {
-			n.resetElectionTimer()
-		}
-	default:
-		panic(fmt.Sprintf("raft: node %d invalid persist action %d", n.id, p.action))
 	}
 }
 
@@ -268,6 +243,7 @@ func (n *Node) becomeFollower(term uint64, leader sim.NodeID) {
 	for i := range n.votesGranted {
 		n.votesGranted[i] = false
 	}
+	n.pendingClients = make(map[uint64]clientRef)
 	n.cancelHeartbeatTimer()
 }
 

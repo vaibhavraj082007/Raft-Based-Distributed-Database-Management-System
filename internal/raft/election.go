@@ -6,20 +6,6 @@ import (
 	"raftkv/internal/sim"
 )
 
-func (n *Node) lastLogIndex() uint64 {
-	if len(n.log) == 0 {
-		panic(fmt.Sprintf("raft: node %d missing log sentinel", n.id))
-	}
-	return n.log[len(n.log)-1].Index
-}
-
-func (n *Node) lastLogTerm() uint64 {
-	if len(n.log) == 0 {
-		panic(fmt.Sprintf("raft: node %d missing log sentinel", n.id))
-	}
-	return n.log[len(n.log)-1].Term
-}
-
 // startElection begins a new term. The self-vote is durable before any
 // RequestVote leaves the node.
 func (n *Node) startElection() {
@@ -33,7 +19,7 @@ func (n *Node) startElection() {
 	for i := range n.votesGranted {
 		n.votesGranted[i] = false
 	}
-	n.beginMetaPersist(n.currentTerm, n.votedFor, actionElectionSelfVote, 0, false, false, false)
+	n.beginMetaPersist(n.currentTerm, n.votedFor, actionElectionSelfVote, requestSummary{}, false, false)
 }
 
 func (n *Node) handleVoteRequest(msg sim.Message) {
@@ -68,7 +54,8 @@ func (n *Node) handleVoteRequest(msg sim.Message) {
 	if newTerm != n.durableTerm || newVote != n.durableVotedFor {
 		n.currentTerm = newTerm
 		n.votedFor = newVote
-		n.beginMetaPersist(newTerm, newVote, actionVoteReply, msg.From, grant, false, restartElectionTimer)
+		n.beginMetaPersist(newTerm, newVote, actionVoteReply,
+			requestSummary{peer: msg.From}, grant, restartElectionTimer)
 		return
 	}
 
@@ -89,7 +76,8 @@ func (n *Node) handleVoteResponse(msg sim.Message) {
 	if resp.Term > n.currentTerm {
 		wasLeader := n.role == Leader
 		n.becomeFollower(resp.Term, 0)
-		n.beginMetaPersist(resp.Term, 0, actionStepDown, msg.From, false, false, wasLeader)
+		n.beginMetaPersist(resp.Term, 0, actionStepDown,
+			requestSummary{peer: msg.From}, false, wasLeader)
 		return
 	}
 	if n.role != Candidate || !resp.VoteGranted {
@@ -105,55 +93,9 @@ func (n *Node) handleVoteResponse(msg sim.Message) {
 	}
 }
 
-func (n *Node) handleAppendRequest(msg sim.Message) {
-	req := decodeAppendRequest(msg.Payload)
-	if !n.validateAppendRequest(msg.From, req) {
-		return
-	}
-
-	if req.Term < n.currentTerm {
-		n.sendAppendResponse(msg.From, n.currentTerm, false)
-		return
-	}
-
-	if req.Term > n.currentTerm {
-		n.becomeFollower(req.Term, req.LeaderID)
-		n.beginMetaPersist(req.Term, 0, actionAppendReply, msg.From, false, true, true)
-		return
-	}
-
-	n.leaderID = req.LeaderID
-	if n.role != Follower {
-		n.becomeFollower(req.Term, req.LeaderID)
-	}
-	n.resetElectionTimer()
-	n.sendAppendResponse(msg.From, n.currentTerm, true)
-}
-
-func (n *Node) handleAppendResponse(msg sim.Message) {
-	resp := decodeAppendResponse(msg.Payload)
-	if !n.isPeer(msg.From) {
-		return
-	}
-	if resp.Term < n.currentTerm {
-		return
-	}
-	if resp.Term > n.currentTerm {
-		wasLeader := n.role == Leader
-		n.becomeFollower(resp.Term, 0)
-		n.beginMetaPersist(resp.Term, 0, actionStepDown, msg.From, false, false, wasLeader)
-		return
-	}
-	if n.role != Leader {
-		return
-	}
-	// Stage 2A heartbeats carry no log information. A same-term failure cannot
-	// be produced by a correct follower, so it is ignored rather than acted on.
-}
-
 // becomeLeader runs only after the election self-vote is durable and a
-// majority of votes is present. It starts heartbeats immediately; Stage 2B
-// inserts the durable no-op before this point.
+// majority of votes is present. It appends the current-term no-op and persists
+// it before any AppendEntries is sent.
 func (n *Node) becomeLeader() {
 	if n.role != Candidate {
 		panic(fmt.Sprintf("raft: node %d became leader from role %s", n.id, n.role))
@@ -174,8 +116,14 @@ func (n *Node) becomeLeader() {
 	n.role = Leader
 	n.leaderID = n.id
 	n.cancelElectionTimer()
-	n.sendHeartbeats()
-	n.scheduleHeartbeatTimer()
+	n.pendingClients = make(map[uint64]clientRef)
+	n.nextIndex = make([]uint64, len(n.peers))
+	n.matchIndex = make([]uint64, len(n.peers))
+	for i := range n.peers {
+		n.nextIndex[i] = n.lastLogIndex() + 1
+	}
+	entry := n.appendLocal(EntryNoop, nil)
+	n.beginLogPersist(logBatch{baseIndex: entry.Index, entries: []Entry{entry}}, actionLeaderNoop, requestSummary{})
 }
 
 func (n *Node) sendVoteRequest(peer sim.NodeID) {
@@ -193,26 +141,6 @@ func (n *Node) sendVoteResponse(peer sim.NodeID, term uint64, granted bool) {
 		Term:        term,
 		VoteGranted: granted,
 	}))
-}
-
-func (n *Node) sendAppendResponse(peer sim.NodeID, term uint64, success bool) {
-	n.env.Send(peer, KindAppendResponse, encodeAppendResponse(AppendResponse{
-		Term:    term,
-		Success: success,
-	}))
-}
-
-func (n *Node) sendHeartbeats() {
-	if n.role != Leader {
-		return
-	}
-	for _, peer := range n.peers {
-		req := AppendRequest{
-			Term:     n.currentTerm,
-			LeaderID: n.id,
-		}
-		n.env.Send(peer, KindAppendRequest, encodeAppendRequest(req))
-	}
 }
 
 func (n *Node) validateVoteRequest(from sim.NodeID, req VoteRequest) bool {
@@ -233,26 +161,6 @@ func (n *Node) validateVoteRequest(from sim.NodeID, req VoteRequest) bool {
 	}
 	if req.LastLogIndex > 0 && req.LastLogTerm < 1 {
 		panic(fmt.Sprintf("raft: node %d vote request has index %d with zero term", n.id, req.LastLogIndex))
-	}
-	return true
-}
-
-func (n *Node) validateAppendRequest(from sim.NodeID, req AppendRequest) bool {
-	if req.Term < 1 {
-		panic(fmt.Sprintf("raft: node %d append request term %d", n.id, req.Term))
-	}
-	if req.LeaderID == 0 {
-		panic(fmt.Sprintf("raft: node %d append request with zero leader", n.id))
-	}
-	if !n.isPeer(req.LeaderID) {
-		return false
-	}
-	if from != req.LeaderID {
-		panic(fmt.Sprintf("raft: node %d append request from %d claims leader %d", n.id, from, req.LeaderID))
-	}
-	if req.PrevLogIndex != 0 || req.PrevLogTerm != 0 || req.LeaderCommit != 0 {
-		panic(fmt.Sprintf("raft: node %d Stage 2A heartbeat has log fields prev=%d/%d commit=%d",
-			n.id, req.PrevLogIndex, req.PrevLogTerm, req.LeaderCommit))
 	}
 	return true
 }

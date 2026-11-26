@@ -1,9 +1,10 @@
 // Package raft implements the Stage 2 Raft node as a deterministic actor.
 //
-// Stage 2A covers leader election, empty AppendEntries heartbeats, crash-safe
-// currentTerm/votedFor persistence, and the per-step Election Safety
-// invariant. Log replication, commit, apply, client commands, and the
-// Troublemaker scenario are deliberately absent.
+// Stage 2B covers leader no-op entries, append-only log persistence,
+// AppendEntries replication with conflict backtracking, commit advancement
+// under the Figure 8 current-term rule, and in-order apply. Client command
+// handling is included because the 2B protocol depends on it. The Troublemaker
+// scenario and scenario-level invariants remain Stage 2C.
 package raft
 
 import (
@@ -34,8 +35,7 @@ func (r Role) String() string {
 	}
 }
 
-// EntryKind identifies a log entry. Stage 2A keeps only the sentinel; Stage 2B
-// adds no-op and command entries.
+// EntryKind identifies a log entry.
 type EntryKind uint8
 
 const (
@@ -73,6 +73,8 @@ type Config struct {
 	HeartbeatInterval  sim.Tick
 	ElectionTimeoutMin sim.Tick
 	ElectionTimeoutMax sim.Tick
+	MaxAppendEntries   int
+	Apply              func(Entry)
 }
 
 func normalizeConfig(cfg Config) Config {
@@ -84,6 +86,9 @@ func normalizeConfig(cfg Config) Config {
 	}
 	if cfg.ElectionTimeoutMax == 0 {
 		cfg.ElectionTimeoutMax = 24
+	}
+	if cfg.MaxAppendEntries == 0 {
+		cfg.MaxAppendEntries = 64
 	}
 	return cfg
 }
@@ -100,6 +105,9 @@ func validateConfig(cfg Config) {
 	}
 	if cfg.ElectionTimeoutMax < cfg.ElectionTimeoutMin {
 		panic("raft: ElectionTimeoutMax must be >= ElectionTimeoutMin")
+	}
+	if cfg.MaxAppendEntries < 1 {
+		panic("raft: MaxAppendEntries must be >= 1")
 	}
 	var prev sim.NodeID
 	for _, peer := range cfg.Peers {
@@ -121,27 +129,60 @@ const (
 	timerTagHeartbeat uint64 = 2
 )
 
-type persistAction uint8
+type persistKind uint8
 
 const (
-	actionNone persistAction = iota
-	actionElectionSelfVote
-	actionVoteReply
-	actionAppendReply
-	actionStepDown
+	persistMeta persistKind = iota
+	persistLog
 )
 
-type pendingPersist struct {
-	action       persistAction
-	phase        uint8 // 1 = Replace issued, 2 = Sync issued
-	tagWrite     uint64
-	tagSync      uint64
-	term         uint64
-	vote         sim.NodeID
+type pendingAction uint8
+
+const (
+	actionNone pendingAction = iota
+	actionElectionSelfVote
+	actionVoteReply
+	actionStepDown
+	actionAppendAfterTerm
+	actionLeaderNoop
+	actionLeaderClientAppend
+	actionFollowerAppendReply
+)
+
+type requestSummary struct {
 	peer         sim.NodeID
-	grant        bool
-	success      bool
-	restartTimer bool
+	term         uint64
+	prevIndex    uint64
+	prevTerm     uint64
+	leaderCommit uint64
+	entries      []Entry
+	clientID     sim.NodeID
+	clientSeq    uint64
+}
+
+type logBatch struct {
+	baseIndex uint64
+	entries   []Entry
+}
+
+type pendingPersist struct {
+	kind          persistKind
+	action        pendingAction
+	phase         uint8 // 1 = append/replace issued, 2 = sync issued
+	tagWrite      uint64
+	tagSync       uint64
+	metaTerm      uint64
+	metaVote      sim.NodeID
+	grant         bool // captured vote decision for actionVoteReply
+	resetElection bool // captured timer decision
+	request       requestSummary
+	batch         logBatch
+	encodedLen    uint64
+}
+
+type clientRef struct {
+	ClientID sim.NodeID
+	Seq      uint64
 }
 
 type inboundKind uint8
@@ -172,8 +213,10 @@ type Node struct {
 	durableTerm     uint64
 	durableVotedFor sim.NodeID
 
-	// Log state. Stage 2A has only the sentinel and no log persistence.
+	// Log state. durableLastIndex is the last index covered by a synced log
+	// batch; logBytes counts the append-only file including obsolete batches.
 	log              []Entry
+	logBytes         uint64
 	durableLastIndex uint64
 	commitIndex      uint64
 	lastApplied      uint64
@@ -184,15 +227,27 @@ type Node struct {
 	votesGranted []bool
 	selfVoted    bool
 
+	// Leader replication state, aligned with peers.
+	nextIndex  []uint64
+	matchIndex []uint64
+
 	electionTimer  sim.TimerID
 	heartbeatTimer sim.TimerID
 
 	// Boot recovery.
-	recovering bool
+	recovering    bool
+	metaRecovered bool
+	logRecovered  bool
+	recoveredMeta []byte
+	recoveredLog  []byte
 
-	// Serialized persistence: at most one meta batch is in flight.
+	// Serialized persistence: at most one batch in flight.
 	busy    bool
 	pending *pendingPersist
 	inbox   []inbound
-	nextIO  uint64
+
+	// Leader-side client notifications; volatile by design.
+	pendingClients map[uint64]clientRef
+
+	nextIO uint64
 }

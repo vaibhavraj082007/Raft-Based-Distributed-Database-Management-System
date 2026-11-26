@@ -366,8 +366,7 @@ func TestElectionTimeoutDrawsFromEnv(t *testing.T) {
 	if len(env.intRangeCalls) != 0 {
 		t.Fatalf("Start drew randomness before recovery: %v", env.intRangeCalls)
 	}
-	read := env.lastRead()
-	n.HandleIO(sim.IOEvent{Tag: read.tag, Op: sim.IORead, Data: env.readData()})
+	completeBoot(t, env, n)
 	if len(env.intRangeCalls) != 1 {
 		t.Fatalf("recovery drew %d ranges, want 1", len(env.intRangeCalls))
 	}
@@ -403,7 +402,7 @@ func TestSingleNodeElection(t *testing.T) {
 	if len(env.replaces) != 1 {
 		t.Fatalf("meta replaces = %d, want 1", len(env.replaces))
 	}
-	completePersist(t, env, n)
+	completeAllPersist(t, env, n)
 
 	if n.role != Leader {
 		t.Fatalf("role = %s, want leader", n.role)
@@ -411,6 +410,13 @@ func TestSingleNodeElection(t *testing.T) {
 	if n.currentTerm != 1 || n.durableTerm != 1 || n.votedFor != 1 || n.durableVotedFor != 1 {
 		t.Fatalf("term/vote = %d/%d durable %d/%d, want 1/1/1/1",
 			n.currentTerm, n.votedFor, n.durableTerm, n.durableVotedFor)
+	}
+	if n.lastLogIndex() != 1 || n.log[1].Kind != EntryNoop || n.log[1].Term != 1 {
+		t.Fatalf("leader log = %+v, want durable term-1 no-op at index 1", n.log)
+	}
+	if n.durableLastIndex != 1 || n.commitIndex != 1 || n.lastApplied != 1 {
+		t.Fatalf("durable/commit/applied = %d/%d/%d, want 1/1/1",
+			n.durableLastIndex, n.commitIndex, n.lastApplied)
 	}
 	if len(env.sent) != 0 {
 		t.Fatalf("single-node leader sent %d vote/heartbeat messages", len(env.sent))
@@ -466,6 +472,7 @@ func TestLeaderStepsDownOnHigherTerm(t *testing.T) {
 	fireElectionTimer(t, env, n)
 	completePersist(t, env, n)
 	n.HandleMessage(voteResponseMessage(2, 1, true))
+	completeAllPersist(t, env, n)
 	if n.role != Leader {
 		t.Fatalf("role = %s, want leader", n.role)
 	}

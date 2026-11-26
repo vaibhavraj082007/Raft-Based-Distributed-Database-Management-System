@@ -13,7 +13,7 @@ failure.
 
 **Stage 1 — deterministic simulator — Complete (approved 2026-11-25, commit `0c7d5fb`).**
 
-**Stage 2 — Raft — 2A implemented, awaiting gate approval; 2B–2C not started.**
+**Stage 2 — Raft — 2A approved; 2B implemented, awaiting gate approval; 2C not started.**
 
 The Stage 1 simulator, chaos scenario, CLI, golden trace, and full test suite are
 approved and pushed. Stage 1 is specified in [PLAN.md](PLAN.md); Stage 2 is
@@ -21,10 +21,12 @@ specified in [PLAN_STAGE2.md](PLAN_STAGE2.md).
 
 Sub-phase 2A implements actor-based leader election, empty `AppendEntries`
 heartbeats, crash-safe `currentTerm`/`votedFor` persistence, and the per-step
-Election Safety invariant in `internal/raft`. As an approved scope extension,
-2A includes heartbeats so leadership stability is tested now; the leader no-op,
-log persistence, replication, commit, the Troublemaker scenario, and the `raft`
-CLI target remain in 2B–2C and have not been started.
+Election Safety invariant in `internal/raft`. Sub-phase 2B adds the leader
+no-op, durable `raft.log` append/truncate batches, `AppendEntries` replication
+with conflict backtracking, majority commit with the Figure 8 current-term
+rule, in-order exactly-once apply, restart replay, and leader/follower client
+request handling with exported client codecs. The Troublemaker scenario, the
+`raft` CLI target, and the golden trace remain in 2C and have not been started.
 
 Verified commands:
 
@@ -60,7 +62,7 @@ The Stage 2 verification matrix and gate commands are in
 | Stage | Layer | Package | Status |
 |------:|-------|---------|--------|
 | 1 | Deterministic simulator (clock, network, disk, RNG, trace, invariants) | `internal/sim` | Complete (approved) |
-| 2 | Raft (election and replication, Raft paper Figure 2) | `internal/raft` | 2A complete (awaiting gate); 2B–2C pending |
+| 2 | Raft (election and replication, Raft paper Figure 2) | `internal/raft` | 2A approved; 2B implemented (awaiting gate); 2C pending |
 | 3 | Storage engine (WAL, then LSM-tree) | `internal/storage` | Not started |
 | 4 | Linearizable KV API with client request ID deduplication | `internal/kv` | Not started |
 | 5 | Sharding, multi-shard transactions | TBD | Not started |
@@ -82,7 +84,7 @@ Simulation code is single-threaded and event-driven.
 │   └── simctl/             # run a scenario by seed, print trace/hashes
 ├── internal/
 │   ├── sim/                # event queue, RNG, network, disk, trace, invariants
-│   ├── raft/               # Stage 2 Raft (2A election implemented)
+│   ├── raft/               # Stage 2 Raft (2A election, 2B replication)
 │   ├── storage/            # later
 │   ├── kv/                 # later
 │   └── scenarios/          # ping workload + planned raft Troublemaker
@@ -149,22 +151,23 @@ go test ./internal/scenarios -run TestGoldenTraceSeed42 -update
 go test ./internal/scenarios -run TestRaftGoldenTraceSeed42 -update   # after 2C
 ```
 
-## Stage 2 plan (2A implemented, 2B–2C pending)
+## Stage 2 plan (2A approved, 2B implemented, 2C pending)
 
 Stage 2 is split into three independently testable gates, specified in
 [PLAN_STAGE2.md](PLAN_STAGE2.md):
 
-- **2A — Election and durable vote state (implemented):** roles, randomized
+- **2A — Election and durable vote state (approved):** roles, randomized
   timeouts, `RequestVote`, empty heartbeats, crash-safe
   `currentTerm`/`votedFor`, and the Election Safety invariant.
-- **2B — Replication and commit safety (not started):** leader no-op and log
+- **2B — Replication and commit safety (implemented):** leader no-op and log
   persistence, `AppendEntries` replication, conflict backtracking, durable
-  append/truncate, and the Figure 8 current-term commit rule.
+  append/truncate, commit/apply, client request handling, and the Figure 8
+  current-term commit rule.
 - **2C — Troublemaker (not started):** the 5-node `raft` scenario, client
-  commands, crashes/restarts, drops/delays/partitions, per-step safety
-  invariants, golden trace, and the 10,000-seed stress target.
+  actor and workload, crashes/restarts, drops/delays/partitions, per-step
+  safety invariants, golden trace, and the 10,000-seed stress target.
 
-Only 2A is implemented. 2B and 2C begin only after 2A passes its review gate.
+Only 2A and 2B are implemented. 2C begins only after 2B passes its review gate.
 
 ## Bug log
 

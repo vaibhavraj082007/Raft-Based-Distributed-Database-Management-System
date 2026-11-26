@@ -15,6 +15,8 @@ const (
 	KindVoteResponse   = "raft.vote-resp"
 	KindAppendRequest  = "raft.append-req"
 	KindAppendResponse = "raft.append-resp"
+	KindClientRequest  = "raft.client-req"
+	KindClientResponse = "raft.client-resp"
 )
 
 type VoteRequest struct {
@@ -29,19 +31,21 @@ type VoteResponse struct {
 	VoteGranted bool
 }
 
-// AppendRequest is an empty heartbeat in Stage 2A. The log fields are present
-// for wire compatibility and must be zero until Stage 2B adds entries.
 type AppendRequest struct {
 	Term         uint64
 	LeaderID     sim.NodeID
 	PrevLogIndex uint64
 	PrevLogTerm  uint64
+	Entries      []Entry
 	LeaderCommit uint64
 }
 
 type AppendResponse struct {
-	Term    uint64
-	Success bool
+	Term          uint64
+	Success       bool
+	MatchIndex    uint64
+	ConflictIndex uint64
+	ConflictTerm  uint64
 }
 
 func encodeVoteRequest(req VoteRequest) []byte {
@@ -85,12 +89,21 @@ func decodeVoteResponse(payload []byte) VoteResponse {
 }
 
 func encodeAppendRequest(req AppendRequest) []byte {
-	b := make([]byte, 0, 36)
+	b := make([]byte, 0, 36+len(req.Entries)*minEntryBytes)
 	b = appendU16(b, wireVersion)
 	b = appendU64(b, req.Term)
 	b = appendU16(b, uint16(req.LeaderID))
 	b = appendU64(b, req.PrevLogIndex)
 	b = appendU64(b, req.PrevLogTerm)
+	b = appendU32(b, uint32(len(req.Entries)))
+	for _, e := range req.Entries {
+		b = appendU64(b, e.Index)
+		b = appendU64(b, e.Term)
+		b = appendU8(b, uint8(e.Kind))
+		b = appendU8(b, 0)
+		b = appendU32(b, uint32(len(e.Data)))
+		b = append(b, e.Data...)
+	}
 	b = appendU64(b, req.LeaderCommit)
 	return b
 }
@@ -102,25 +115,59 @@ func decodeAppendRequest(payload []byte) AppendRequest {
 		LeaderID:     sim.NodeID(d.u16()),
 		PrevLogIndex: d.u64(),
 		PrevLogTerm:  d.u64(),
-		LeaderCommit: d.u64(),
 	}
+	count := d.u32()
+	if count > 1<<20 {
+		panic(fmt.Sprintf("raft: %s entry count %d is implausible", KindAppendRequest, count))
+	}
+	if uint64(count) > uint64(d.remaining())/minEntryBytes {
+		panic(fmt.Sprintf("raft: %s entry count %d does not fit the payload", KindAppendRequest, count))
+	}
+	req.Entries = make([]Entry, 0, count)
+	for i := uint32(0); i < count; i++ {
+		e := Entry{
+			Index: d.u64(),
+			Term:  d.u64(),
+			Kind:  EntryKind(d.u8()),
+		}
+		if reserved := d.u8(); reserved != 0 {
+			panic(fmt.Sprintf("raft: %s entry %d reserved byte %d", KindAppendRequest, i, reserved))
+		}
+		n := d.u32()
+		if n > maxEntryBytes {
+			panic(fmt.Sprintf("raft: %s entry %d data %d exceeds cap %d",
+				KindAppendRequest, i, n, maxEntryBytes))
+		}
+		e.Data = cloneEntryData(d.bytes(int(n)))
+		if e.Kind != EntryNoop && e.Kind != EntryCommand {
+			panic(fmt.Sprintf("raft: %s entry %d has kind %d", KindAppendRequest, i, e.Kind))
+		}
+		req.Entries = append(req.Entries, e)
+	}
+	req.LeaderCommit = d.u64()
 	d.done()
 	return req
 }
 
 func encodeAppendResponse(resp AppendResponse) []byte {
-	b := make([]byte, 0, 11)
+	b := make([]byte, 0, 33)
 	b = appendU16(b, wireVersion)
 	b = appendU64(b, resp.Term)
 	b = appendU8(b, boolByte(resp.Success))
+	b = appendU64(b, resp.MatchIndex)
+	b = appendU64(b, resp.ConflictIndex)
+	b = appendU64(b, resp.ConflictTerm)
 	return b
 }
 
 func decodeAppendResponse(payload []byte) AppendResponse {
 	d := newDecoder(payload, KindAppendResponse)
 	resp := AppendResponse{
-		Term:    d.u64(),
-		Success: d.boolean(),
+		Term:          d.u64(),
+		Success:       d.boolean(),
+		MatchIndex:    d.u64(),
+		ConflictIndex: d.u64(),
+		ConflictTerm:  d.u64(),
 	}
 	d.done()
 	return resp
@@ -180,12 +227,34 @@ func (d *decoder) u16() uint16 {
 	return v
 }
 
+func (d *decoder) u32() uint32 {
+	if d.off+4 > len(d.b) {
+		panic(fmt.Sprintf("raft: truncated %s payload", d.kind))
+	}
+	v := binary.BigEndian.Uint32(d.b[d.off:])
+	d.off += 4
+	return v
+}
+
 func (d *decoder) u64() uint64 {
 	if d.off+8 > len(d.b) {
 		panic(fmt.Sprintf("raft: truncated %s payload", d.kind))
 	}
 	v := binary.BigEndian.Uint64(d.b[d.off:])
 	d.off += 8
+	return v
+}
+
+func (d *decoder) remaining() int {
+	return len(d.b) - d.off
+}
+
+func (d *decoder) bytes(n int) []byte {
+	if n < 0 || d.off+n > len(d.b) {
+		panic(fmt.Sprintf("raft: truncated %s payload", d.kind))
+	}
+	v := d.b[d.off : d.off+n]
+	d.off += n
 	return v
 }
 
