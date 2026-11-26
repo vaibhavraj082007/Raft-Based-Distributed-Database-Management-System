@@ -1990,8 +1990,8 @@ Raft suite. `make stress-raft` is the explicit 10,000+ target.
 ### 12.3 `README.md`
 
 - Stage 1 status: `Complete (approved 2026-11-25, commit 0c7d5fb)`.
-- Stage 2 status: `Plan under review`; link to `PLAN_STAGE2.md`.
-- Architecture table: Stage 1 complete; Stage 2 plan under review; later stages
+- Stage 2 status: current sub-phase status; link to `PLAN_STAGE2.md`.
+- Architecture table: Stage 1 complete; Stage 2 current status; later stages
   unchanged.
 - Repository layout: add `PLAN_STAGE2.md`, `internal/scenarios/raft.go`,
   `testdata/stage2/raft-seed-42.trace`; mark `internal/raft` as Stage 2.

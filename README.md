@@ -74,7 +74,7 @@ Simulation code is single-threaded and event-driven.
 ```text
 .
 ├── PLAN.md                 # Stage 1 specification
-├── PLAN_STAGE2.md          # Stage 2 Raft specification (under review)
+├── PLAN_STAGE2.md          # Stage 2 Raft specification
 ├── README.md
 ├── Makefile
 ├── go.mod
