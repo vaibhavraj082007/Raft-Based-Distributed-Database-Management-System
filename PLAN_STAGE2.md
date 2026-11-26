@@ -1,13 +1,20 @@
 # Stage 2 — Raft: 5-Node Deterministic Cluster
 
-**Status:** Proposed — awaiting approval
+**Status:** Approved 2026-11-25; 2A implemented 2026-11-26, 2B–2C pending
 **Date:** 2026-11-25
 **Scope:** A from-scratch, actor-based Raft implementation in `internal/raft`,
 a deterministic `raft` scenario named **Troublemaker**, per-step safety
 invariants, golden replay, and targeted Figure 8 and crash-durability tests.
 **Depends on:** Stage 1 complete and approved (commit `0c7d5fb`).
-**Approval gate:** No `internal/raft` implementation code is written until this
-document is approved.
+**Approval gate:** Approved. Implementation proceeds one sub-phase at a time;
+2B and 2C remain gated on acceptance of the preceding sub-phase.
+
+**Implementation status:**
+
+- **2A:** Implemented in `internal/raft`; awaiting gate approval. Includes
+  empty `AppendEntries` heartbeats and the `raft.election-safety` invariant.
+- **2B:** Not started.
+- **2C:** Not started.
 
 ---
 
@@ -119,6 +126,12 @@ Deliverables:
 - Recovery of term, vote, and log from disk on every boot.
 - Unit tests for vote rules, stale terms, log up-to-date checks, and
   crash-before-sync.
+
+> **2A implementation note (2026-11-26):** The approved 2A scope was extended
+> to include empty `AppendEntries` heartbeats, so leadership stability is tested
+> within 2A. To keep log replication out of 2A, the leader no-op entry and all
+> log persistence are deferred to 2B; 2A persists only `raft.meta`
+> (`currentTerm`/`votedFor`), and boot recovery restores only those fields.
 
 Gate 2A:
 

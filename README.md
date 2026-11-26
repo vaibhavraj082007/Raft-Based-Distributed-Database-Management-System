@@ -13,12 +13,18 @@ failure.
 
 **Stage 1 — deterministic simulator — Complete (approved 2026-11-25, commit `0c7d5fb`).**
 
-**Stage 2 — Raft — Plan under review.**
+**Stage 2 — Raft — 2A implemented, awaiting gate approval; 2B–2C not started.**
 
 The Stage 1 simulator, chaos scenario, CLI, golden trace, and full test suite are
-approved and pushed. No `internal/raft` implementation exists yet. Stage 1 is
-specified in [PLAN.md](PLAN.md); Stage 2 is specified in
-[PLAN_STAGE2.md](PLAN_STAGE2.md) and begins only after that plan is approved.
+approved and pushed. Stage 1 is specified in [PLAN.md](PLAN.md); Stage 2 is
+specified in [PLAN_STAGE2.md](PLAN_STAGE2.md).
+
+Sub-phase 2A implements actor-based leader election, empty `AppendEntries`
+heartbeats, crash-safe `currentTerm`/`votedFor` persistence, and the per-step
+Election Safety invariant in `internal/raft`. As an approved scope extension,
+2A includes heartbeats so leadership stability is tested now; the leader no-op,
+log persistence, replication, commit, the Troublemaker scenario, and the `raft`
+CLI target remain in 2B–2C and have not been started.
 
 Verified commands:
 
@@ -26,6 +32,7 @@ Verified commands:
 go test ./...
 go test -race ./...
 go vet ./...
+go test ./internal/raft -count=5
 go test ./internal/scenarios -run TestSameSeedProducesIdenticalTrace -count=5
 go run ./cmd/simctl -seed 42 -scenario ping -ticks 500 -trace
 ```
@@ -53,7 +60,7 @@ The Stage 2 verification matrix and gate commands are in
 | Stage | Layer | Package | Status |
 |------:|-------|---------|--------|
 | 1 | Deterministic simulator (clock, network, disk, RNG, trace, invariants) | `internal/sim` | Complete (approved) |
-| 2 | Raft (election and replication, Raft paper Figure 2) | `internal/raft` | Plan under review |
+| 2 | Raft (election and replication, Raft paper Figure 2) | `internal/raft` | 2A complete (awaiting gate); 2B–2C pending |
 | 3 | Storage engine (WAL, then LSM-tree) | `internal/storage` | Not started |
 | 4 | Linearizable KV API with client request ID deduplication | `internal/kv` | Not started |
 | 5 | Sharding, multi-shard transactions | TBD | Not started |
@@ -75,7 +82,7 @@ Simulation code is single-threaded and event-driven.
 │   └── simctl/             # run a scenario by seed, print trace/hashes
 ├── internal/
 │   ├── sim/                # event queue, RNG, network, disk, trace, invariants
-│   ├── raft/               # Stage 2, intentionally empty until approval
+│   ├── raft/               # Stage 2 Raft (2A election implemented)
 │   ├── storage/            # later
 │   ├── kv/                 # later
 │   └── scenarios/          # ping workload + planned raft Troublemaker
@@ -125,7 +132,7 @@ make sim           # go run ./cmd/simctl -seed 1 -scenario ping -trace
 go run ./cmd/simctl -seed <N> -scenario ping -ticks <T> -trace
 ```
 
-Once Stage 2 is approved and implemented, these commands are added:
+Once 2C adds the `raft` scenario, these commands will be added:
 
 ```sh
 make sim-raft      # go run ./cmd/simctl -seed 1 -scenario raft -ticks 400 -trace
@@ -139,24 +146,25 @@ Regenerate the reviewed golden traces after an intentional behavior change:
 
 ```sh
 go test ./internal/scenarios -run TestGoldenTraceSeed42 -update
-go test ./internal/scenarios -run TestRaftGoldenTraceSeed42 -update   # after Stage 2
+go test ./internal/scenarios -run TestRaftGoldenTraceSeed42 -update   # after 2C
 ```
 
-## Stage 2 plan (under review)
+## Stage 2 plan (2A implemented, 2B–2C pending)
 
 Stage 2 is split into three independently testable gates, specified in
 [PLAN_STAGE2.md](PLAN_STAGE2.md):
 
-- **2A — Election and durable vote state:** roles, randomized timeouts,
-  `RequestVote`, and crash-safe `currentTerm`/`votedFor`.
-- **2B — Replication and commit safety:** `AppendEntries`, conflict
-  backtracking, durable append/truncate, and the Figure 8 current-term commit
-  rule.
-- **2C — Troublemaker:** the 5-node `raft` scenario, client commands,
-  crashes/restarts, drops/delays/partitions, per-step safety invariants, golden
-  trace, and the 10,000-seed stress target.
+- **2A — Election and durable vote state (implemented):** roles, randomized
+  timeouts, `RequestVote`, empty heartbeats, crash-safe
+  `currentTerm`/`votedFor`, and the Election Safety invariant.
+- **2B — Replication and commit safety (not started):** leader no-op and log
+  persistence, `AppendEntries` replication, conflict backtracking, durable
+  append/truncate, and the Figure 8 current-term commit rule.
+- **2C — Troublemaker (not started):** the 5-node `raft` scenario, client
+  commands, crashes/restarts, drops/delays/partitions, per-step safety
+  invariants, golden trace, and the 10,000-seed stress target.
 
-No `internal/raft` code is written until the plan is approved.
+Only 2A is implemented. 2B and 2C begin only after 2A passes its review gate.
 
 ## Bug log
 
