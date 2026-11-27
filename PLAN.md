@@ -6,8 +6,8 @@
 sharding, SQL, or dashboard code in this stage.
 
 > Stage 1 is approved. Stage 2 (Raft) is specified in
-> [PLAN_STAGE2.md](PLAN_STAGE2.md) and is not implemented until that plan is
-> approved.
+> [PLAN_STAGE2.md](PLAN_STAGE2.md); 2A and 2B are approved and 2C is
+> implemented pending its review gate.
 
 ## 1. Goal
 

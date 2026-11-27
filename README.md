@@ -13,7 +13,7 @@ failure.
 
 **Stage 1 — deterministic simulator — Complete (approved 2026-11-25, commit `0c7d5fb`).**
 
-**Stage 2 — Raft — 2A approved; 2B implemented, awaiting gate approval; 2C not started.**
+**Stage 2 — Raft — 2A approved; 2B approved; 2C implemented, awaiting gate approval.**
 
 The Stage 1 simulator, chaos scenario, CLI, golden trace, and full test suite are
 approved and pushed. Stage 1 is specified in [PLAN.md](PLAN.md); Stage 2 is
@@ -25,8 +25,10 @@ Election Safety invariant in `internal/raft`. Sub-phase 2B adds the leader
 no-op, durable `raft.log` append/truncate batches, `AppendEntries` replication
 with conflict backtracking, majority commit with the Figure 8 current-term
 rule, in-order exactly-once apply, restart replay, and leader/follower client
-request handling with exported client codecs. The Troublemaker scenario, the
-`raft` CLI target, and the golden trace remain in 2C and have not been started.
+request handling with exported client codecs. Sub-phase 2C adds the 5-node
+Troublemaker scenario, a non-voting client workload, crashes/restarts,
+drops/delays/partitions, the Log Matching, State Machine Safety, and Commit
+Durability invariants, the `raft` CLI target, and the reviewed golden trace.
 
 Verified commands:
 
@@ -36,7 +38,11 @@ go test -race ./...
 go vet ./...
 go test ./internal/raft -count=5
 go test ./internal/scenarios -run TestSameSeedProducesIdenticalTrace -count=5
+go test ./internal/scenarios -run TestRaftSameSeedProducesIdenticalTrace -count=5
+go test ./internal/scenarios -run TestRaftMultiSeed -count=1
+make stress-raft SEEDS=10000
 go run ./cmd/simctl -seed 42 -scenario ping -ticks 500 -trace
+go run ./cmd/simctl -seed 42 -scenario raft -ticks 400 -trace
 ```
 
 The Stage 2 verification matrix and gate commands are in
@@ -62,7 +68,7 @@ The Stage 2 verification matrix and gate commands are in
 | Stage | Layer | Package | Status |
 |------:|-------|---------|--------|
 | 1 | Deterministic simulator (clock, network, disk, RNG, trace, invariants) | `internal/sim` | Complete (approved) |
-| 2 | Raft (election and replication, Raft paper Figure 2) | `internal/raft` | 2A approved; 2B implemented (awaiting gate); 2C pending |
+| 2 | Raft (election and replication, Raft paper Figure 2) | `internal/raft` | 2A and 2B approved; 2C implemented (awaiting gate) |
 | 3 | Storage engine (WAL, then LSM-tree) | `internal/storage` | Not started |
 | 4 | Linearizable KV API with client request ID deduplication | `internal/kv` | Not started |
 | 5 | Sharding, multi-shard transactions | TBD | Not started |
@@ -84,14 +90,15 @@ Simulation code is single-threaded and event-driven.
 │   └── simctl/             # run a scenario by seed, print trace/hashes
 ├── internal/
 │   ├── sim/                # event queue, RNG, network, disk, trace, invariants
-│   ├── raft/               # Stage 2 Raft (2A election, 2B replication)
+│   ├── raft/               # Stage 2 Raft (2A election, 2B replication, 2C invariants)
 │   ├── storage/            # later
 │   ├── kv/                 # later
-│   └── scenarios/          # ping workload + planned raft Troublemaker
+│   └── scenarios/          # ping workload + raft Troublemaker scenario
 ├── testdata/
 │   ├── stage1/
 │   │   └── ping-seed-42.trace
-│   └── stage2/             # planned raft-seed-42.trace
+│   └── stage2/
+│       └── raft-seed-42.trace
 ```
 
 Stage 1 includes a frozen SplitMix64 PRNG, stable `(tick, sequence)` event
@@ -129,18 +136,11 @@ make test          # go test ./...
 make test-race     # go test -race ./...
 make vet           # go vet ./...
 make sim           # go run ./cmd/simctl -seed 1 -scenario ping -trace
-
-# Replay a failing Stage 1 seed (the failure report prints the exact command):
-go run ./cmd/simctl -seed <N> -scenario ping -ticks <T> -trace
-```
-
-Once 2C adds the `raft` scenario, these commands will be added:
-
-```sh
 make sim-raft      # go run ./cmd/simctl -seed 1 -scenario raft -ticks 400 -trace
 make stress-raft SEEDS=10000   # explicit 10,000-seed Raft stress target
 
-# Replay a failing Raft seed:
+# Replay a failing seed (the failure report prints the exact command):
+go run ./cmd/simctl -seed <N> -scenario ping -ticks <T> -trace
 go run ./cmd/simctl -seed <N> -scenario raft -ticks <T> -trace
 ```
 
@@ -148,10 +148,10 @@ Regenerate the reviewed golden traces after an intentional behavior change:
 
 ```sh
 go test ./internal/scenarios -run TestGoldenTraceSeed42 -update
-go test ./internal/scenarios -run TestRaftGoldenTraceSeed42 -update   # after 2C
+go test ./internal/scenarios -run TestRaftGoldenTraceSeed42 -update
 ```
 
-## Stage 2 plan (2A approved, 2B implemented, 2C pending)
+## Stage 2 plan (2A and 2B approved, 2C implemented)
 
 Stage 2 is split into three independently testable gates, specified in
 [PLAN_STAGE2.md](PLAN_STAGE2.md):
@@ -159,15 +159,17 @@ Stage 2 is split into three independently testable gates, specified in
 - **2A — Election and durable vote state (approved):** roles, randomized
   timeouts, `RequestVote`, empty heartbeats, crash-safe
   `currentTerm`/`votedFor`, and the Election Safety invariant.
-- **2B — Replication and commit safety (implemented):** leader no-op and log
+- **2B — Replication and commit safety (approved):** leader no-op and log
   persistence, `AppendEntries` replication, conflict backtracking, durable
   append/truncate, commit/apply, client request handling, and the Figure 8
   current-term commit rule.
-- **2C — Troublemaker (not started):** the 5-node `raft` scenario, client
-  actor and workload, crashes/restarts, drops/delays/partitions, per-step
-  safety invariants, golden trace, and the 10,000-seed stress target.
+- **2C — Troublemaker (implemented, awaiting gate):** the 5-node `raft`
+  scenario, client actor and workload, crashes/restarts,
+  drops/delays/partitions, the Log Matching, State Machine Safety, and Commit
+  Durability invariants, golden trace, and the 10,000-seed stress target.
 
-Only 2A and 2B are implemented. 2C begins only after 2B passes its review gate.
+2C is implemented and verified locally; Stage 3 work begins only after the 2C
+review gate is approved.
 
 ## Bug log
 
@@ -176,9 +178,10 @@ accepted. The seed, scenario, and regression test are mandatory. Stage 2 bugs
 are appended as `S2-00N` with the same fields; the Stage 1 entry below remains
 as the first record.
 
-| ID | Stage | Seed | Symptom | Root cause | Fix | Regression test |
-|----|------:|-----:|---------|------------|-----|-----------------|
-| S1-001 | 1 | 5 (forced restarts) | Recovery invariant would falsely report that a node recovered more records than it synced after two or more restarts | The ledger tracked only the current incarnation's synced count, while the journal is cumulative across incarnations | Track cumulative synced records across all incarnations, keyed by an incarnation counter | `TestPingInvariantAcrossMultipleRestarts` |
+| ID | Stage | Scenario | Seed | Symptom | Root cause | Fix | Regression test |
+|----|------:|----------|-----:|---------|------------|-----|-----------------|
+| S1-001 | 1 | ping | 5 (forced restarts) | Recovery invariant would falsely report that a node recovered more records than it synced after two or more restarts | The ledger tracked only the current incarnation's synced count, while the journal is cumulative across incarnations | Track cumulative synced records across all incarnations, keyed by an incarnation counter | `TestPingInvariantAcrossMultipleRestarts` |
+| S2-001 | 2 | raft | 42 | Commit Durability falsely rejected a stale term-1 leader that was partitioned from the term-2 majority (`leader node 1 ... has last log index 1 below committed index 2`, observed at tick 147 during 2C development) | The invariant required every current leader to contain every observed committed entry, but Leader Completeness only requires entries committed at or before the leader's own term; an old leader may legally be unaware of a newer majority's commits | Record the first observed commit term for each index and qualify the leader check to entries committed at or before the leader's term; keep the unqualified committed-loss check on restart | `TestRaftCommitDurabilityAllowsStaleLeader` |
 
 ## Stage gates
 

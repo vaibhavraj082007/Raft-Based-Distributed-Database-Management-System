@@ -33,8 +33,11 @@ func run() error {
 	if *ticks < 0 {
 		return fmt.Errorf("simctl: ticks must be >= 0, got %d", *ticks)
 	}
-	if *scenario != scenarios.PingScenario {
-		return fmt.Errorf("simctl: unknown scenario %q (available: %s)", *scenario, scenarios.PingScenario)
+	switch *scenario {
+	case scenarios.PingScenario, scenarios.RaftScenario:
+	default:
+		return fmt.Errorf("simctl: unknown scenario %q (available: %s, %s)",
+			*scenario, scenarios.PingScenario, scenarios.RaftScenario)
 	}
 
 	var traceOut io.Writer
@@ -46,12 +49,20 @@ func run() error {
 		level = sim.TraceDecisions
 	}
 
-	s, err := scenarios.NewPing(sim.Config{
+	cfg := sim.Config{
 		Seed:       uint64(*seed),
 		Scenario:   *scenario,
 		Trace:      traceOut,
 		TraceLevel: level,
-	}, 5, sim.Tick(*ticks))
+	}
+	var s *sim.Sim
+	var err error
+	switch *scenario {
+	case scenarios.PingScenario:
+		s, err = scenarios.NewPing(cfg, 5, sim.Tick(*ticks))
+	case scenarios.RaftScenario:
+		s, err = scenarios.NewRaft(cfg, scenarios.RaftNodeCount, sim.Tick(*ticks))
+	}
 	if err != nil {
 		return fmt.Errorf("simctl: setup: %w", err)
 	}

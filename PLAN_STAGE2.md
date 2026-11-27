@@ -1793,6 +1793,14 @@ This enforces both “committed entries never disappear” and “every future l
 contains every committed entry” (Leader Completeness). Combined with Log
 Matching and State Machine Safety, it covers the Stage 2 safety requirement.
 
+**Implementation note (S2-001, 2026-11-27).** Leader Completeness is qualified
+by the term in which an entry was first observed committed. A leader in term
+`T` must contain entries committed at or before `T`; it may legitimately lack
+entries committed by a later-term majority while it is partitioned. The
+unqualified `LastLogIndex >= maxCommitted` check is retained for restart
+durability, where the node's own observed high-water mark applies. Regression:
+`TestRaftCommitDurabilityAllowsStaleLeader`.
+
 ### 9.5 Invariant failure quality
 
 An invariant error includes:
