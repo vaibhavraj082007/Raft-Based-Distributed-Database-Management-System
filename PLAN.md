@@ -6,8 +6,9 @@
 sharding, SQL, or dashboard code in this stage.
 
 > Stage 1 is approved. Stage 2 (Raft) is specified in
-> [PLAN_STAGE2.md](PLAN_STAGE2.md); 2A and 2B are approved and 2C is
-> implemented pending its review gate.
+> [PLAN_STAGE2.md](PLAN_STAGE2.md) and is complete (approved 2026-11-28).
+> Stage 3 (storage) is specified in [PLAN_STAGE3.md](PLAN_STAGE3.md) and is
+> awaiting plan approval.
 
 ## 1. Goal
 

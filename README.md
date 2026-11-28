@@ -13,11 +13,16 @@ failure.
 
 **Stage 1 — deterministic simulator — Complete (approved 2026-11-25, commit `0c7d5fb`).**
 
-**Stage 2 — Raft — 2A approved; 2B approved; 2C implemented, awaiting gate approval.**
+**Stage 2 — Raft — Complete (approved 2026-11-28, commit `c8bac13`).**
+
+**Stage 3 — storage engine — plan proposed, awaiting approval.**
 
 The Stage 1 simulator, chaos scenario, CLI, golden trace, and full test suite are
-approved and pushed. Stage 1 is specified in [PLAN.md](PLAN.md); Stage 2 is
-specified in [PLAN_STAGE2.md](PLAN_STAGE2.md).
+approved and pushed. Stage 2's 5-node Raft implementation, Troublemaker scenario,
+invariants, golden trace, and 10,000-seed stress run are approved and pushed.
+Stage 1 is specified in [PLAN.md](PLAN.md); Stage 2 is specified in
+[PLAN_STAGE2.md](PLAN_STAGE2.md); Stage 3 is specified in
+[PLAN_STAGE3.md](PLAN_STAGE3.md).
 
 Sub-phase 2A implements actor-based leader election, empty `AppendEntries`
 heartbeats, crash-safe `currentTerm`/`votedFor` persistence, and the per-step
@@ -29,6 +34,7 @@ request handling with exported client codecs. Sub-phase 2C adds the 5-node
 Troublemaker scenario, a non-voting client workload, crashes/restarts,
 drops/delays/partitions, the Log Matching, State Machine Safety, and Commit
 Durability invariants, the `raft` CLI target, and the reviewed golden trace.
+Stage 2 is complete and approved.
 
 Verified commands:
 
@@ -68,8 +74,8 @@ The Stage 2 verification matrix and gate commands are in
 | Stage | Layer | Package | Status |
 |------:|-------|---------|--------|
 | 1 | Deterministic simulator (clock, network, disk, RNG, trace, invariants) | `internal/sim` | Complete (approved) |
-| 2 | Raft (election and replication, Raft paper Figure 2) | `internal/raft` | 2A and 2B approved; 2C implemented (awaiting gate) |
-| 3 | Storage engine (WAL, then LSM-tree) | `internal/storage` | Not started |
+| 2 | Raft (election and replication, Raft paper Figure 2) | `internal/raft` | Complete (approved 2026-11-28) |
+| 3 | Storage engine (WAL, then LSM-tree) | `internal/storage` | Plan proposed (awaiting approval) |
 | 4 | Linearizable KV API with client request ID deduplication | `internal/kv` | Not started |
 | 5 | Sharding, multi-shard transactions | TBD | Not started |
 | 6 | Tiny SQL layer, React + WebSocket dashboard | TBD | Not started |
@@ -83,6 +89,7 @@ Simulation code is single-threaded and event-driven.
 .
 ├── PLAN.md                 # Stage 1 specification
 ├── PLAN_STAGE2.md          # Stage 2 Raft specification
+├── PLAN_STAGE3.md          # Stage 3 storage specification (proposed)
 ├── README.md
 ├── Makefile
 ├── go.mod
@@ -91,14 +98,16 @@ Simulation code is single-threaded and event-driven.
 ├── internal/
 │   ├── sim/                # event queue, RNG, network, disk, trace, invariants
 │   ├── raft/               # Stage 2 Raft (2A election, 2B replication, 2C invariants)
-│   ├── storage/            # later
+│   ├── storage/            # Stage 3 WAL + LSM storage engine (planned)
 │   ├── kv/                 # later
-│   └── scenarios/          # ping workload + raft Troublemaker scenario
+│   └── scenarios/          # ping + raft Troublemaker + storage chaos scenarios
 ├── testdata/
 │   ├── stage1/
 │   │   └── ping-seed-42.trace
-│   └── stage2/
-│       └── raft-seed-42.trace
+│   ├── stage2/
+│   │   └── raft-seed-42.trace
+│   └── stage3/
+│       └── storage-seed-42.trace   # planned
 ```
 
 Stage 1 includes a frozen SplitMix64 PRNG, stable `(tick, sequence)` event
@@ -144,14 +153,25 @@ go run ./cmd/simctl -seed <N> -scenario ping -ticks <T> -trace
 go run ./cmd/simctl -seed <N> -scenario raft -ticks <T> -trace
 ```
 
+Stage 3 adds these targets when the plan is approved:
+
+```sh
+make sim-storage               # storage chaos run, seed 1
+make stress-storage SEEDS=10000 # explicit 10,000-seed storage stress target
+go run ./cmd/simctl -seed 42 -scenario storage -ticks 400 -trace
+```
+
 Regenerate the reviewed golden traces after an intentional behavior change:
 
 ```sh
 go test ./internal/scenarios -run TestGoldenTraceSeed42 -update
 go test ./internal/scenarios -run TestRaftGoldenTraceSeed42 -update
+go test ./internal/scenarios -run TestStorageGoldenTraceSeed42 -update  # planned
 ```
 
-## Stage 2 plan (2A and 2B approved, 2C implemented)
+After approval, `make golden-stage3` is the short form of the last command.
+
+## Stage 2 plan (complete)
 
 Stage 2 is split into three independently testable gates, specified in
 [PLAN_STAGE2.md](PLAN_STAGE2.md):
@@ -163,20 +183,40 @@ Stage 2 is split into three independently testable gates, specified in
   persistence, `AppendEntries` replication, conflict backtracking, durable
   append/truncate, commit/apply, client request handling, and the Figure 8
   current-term commit rule.
-- **2C — Troublemaker (implemented, awaiting gate):** the 5-node `raft`
-  scenario, client actor and workload, crashes/restarts,
-  drops/delays/partitions, the Log Matching, State Machine Safety, and Commit
-  Durability invariants, golden trace, and the 10,000-seed stress target.
+- **2C — Troublemaker (approved):** the 5-node `raft` scenario, client actor and
+  workload, crashes/restarts, drops/delays/partitions, the Log Matching, State
+  Machine Safety, and Commit Durability invariants, golden trace, and the
+  10,000-seed stress target.
 
-2C is implemented and verified locally; Stage 3 work begins only after the 2C
-review gate is approved.
+Stage 2 is complete and approved. Stage 3 work begins only after the Stage 3
+plan is approved.
+
+## Stage 3 plan (proposed, awaiting approval)
+
+Stage 3 is split into three independently testable gates, specified in
+[PLAN_STAGE3.md](PLAN_STAGE3.md):
+
+- **3A — WAL and crash recovery:** canonical CRC32-framed `Put`/`Delete`
+  records, atomic batches with an applied-index field, acknowledge only after
+  the asynchronous `Sync` completes, restart replay, and torn/corrupt/unsynced
+  tail truncation.
+- **3B — Memtable, SSTables, and compaction:** deterministic sorted memtable,
+  immutable checksummed SSTables, manifest commit ordering, flush thresholds,
+  tombstones, and deterministic compaction that resolves shadowed keys.
+- **3C — Storage chaos scenario and oracle invariants:** the `storage` scenario,
+  randomized workload with crashes at every write/flush/compaction phase, the
+  durability/atomicity/read/tombstone/checksum invariants, golden trace, and the
+  10,000-seed stress target.
+
+No `internal/storage` implementation code is written until this plan is
+approved.
 
 ## Bug log
 
 Every bug found by the simulator must be recorded here before its fix is
 accepted. The seed, scenario, and regression test are mandatory. Stage 2 bugs
-are appended as `S2-00N` with the same fields; the Stage 1 entry below remains
-as the first record.
+are appended as `S2-00N`; Stage 3 bugs will be appended as `S3-00N` with the
+same fields. The Stage 1 entry below remains as the first record.
 
 | ID | Stage | Scenario | Seed | Symptom | Root cause | Fix | Regression test |
 |----|------:|----------|-----:|---------|------------|-----|-----------------|
@@ -193,7 +233,9 @@ A stage is complete only when:
 4. Test output has been shown and the user has approved moving on.
 
 For Stage 2, each of 2A, 2B, and 2C has its own gate and verification commands
-in [PLAN_STAGE2.md](PLAN_STAGE2.md). The full 10,000-seed stress run is required
-before Stage 2 is presented for final approval.
+in [PLAN_STAGE2.md](PLAN_STAGE2.md). The full 10,000-seed stress run was required
+before Stage 2 was approved. Stage 3 follows the same rule: 3A, 3B, and 3C each
+have a gate in [PLAN_STAGE3.md](PLAN_STAGE3.md), and the 10,000-seed storage
+stress run is required before Stage 3 is presented for final approval.
 
 No code for a later stage is written early.
